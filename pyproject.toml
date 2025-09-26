@@ -17,6 +17,14 @@ dev = [
     "pytest-cov>=7.0.0",
     "ruff>=0.13.2",
 ]
+ml = [
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.6",
+    "numpy>=2.3.3",
+    "pandas>=2.3.2",
+    "scikit-learn>=1.7.2",
+    "scipy>=1.16.2",
+]
 
 [tool.ruff]
 line-length = 100
