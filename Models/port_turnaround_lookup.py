@@ -14,6 +14,18 @@ def load_csv(name: str) -> pd.DataFrame:
     return df
 
 
+def try_write_parquet(df: pd.DataFrame, path: Path) -> bool:
+    """Write parquet if an engine is installed, otherwise emit a gentle reminder."""
+    try:
+        df.to_parquet(path, index=False)
+        return True
+    except ImportError:
+        print(
+            f"Skipping parquet output ({path.name}): install 'pyarrow' or 'fastparquet' to enable parquet exports."
+        )
+        return False
+
+
 # ---- Load raw tables ----
 pc = load_csv("port_calls_completed_asof_2025-12-31.csv")
 voy = load_csv("voyages_completed_asof_2025-12-31.csv")
@@ -120,7 +132,13 @@ def trim_group(g: pd.DataFrame) -> pd.DataFrame:
     return g[(g["DAYS_IN_PORT"] >= q05) & (g["DAYS_IN_PORT"] <= q95)]
 
 
-pc_trim = pc.groupby([k for k in trim_keys if k in pc.columns], dropna=False, group_keys=False).apply(trim_group)
+group_cols = [k for k in trim_keys if k in pc.columns]
+pc_trim = pc.groupby(group_cols, dropna=False, group_keys=False).apply(
+    trim_group, include_groups=False
+)
+missing_cols = [col for col in group_cols if col not in pc_trim.columns]
+if missing_cols:
+    pc_trim = pc_trim.join(pc[missing_cols], how="left")
 
 # ---- Build fallback hierarchy ----
 # Most specific → least specific
@@ -143,11 +161,26 @@ hierarchy = [
 
 def agg_by(keys):
     if not keys:  # global
-        df = pc_trim.agg(median_days_in_port=("DAYS_IN_PORT", "median"), n_obs=("DAYS_IN_PORT", "size")).to_frame().T
-        # put all key columns back as NaN
+        stats = {
+            "median_days_in_port": pc_trim["DAYS_IN_PORT"].median(),
+            "p10": pc_trim["DAYS_IN_PORT"].quantile(0.10),
+            "p90": pc_trim["DAYS_IN_PORT"].quantile(0.90),
+            "n_obs": pc_trim["DAYS_IN_PORT"].size,
+        }
+        df = pd.DataFrame([stats])
         for c in ["PORT_ID", "TERMINAL_ID", "IS_BALLAST", "VESSEL_TYPE_ID", "MONTH_NO"]:
             df[c] = np.nan
-        df = df[["PORT_ID", "TERMINAL_ID", "IS_BALLAST", "VESSEL_TYPE_ID", "MONTH_NO", "median_days_in_port", "n_obs"]]
+        df = df[[
+            "PORT_ID",
+            "TERMINAL_ID",
+            "IS_BALLAST",
+            "VESSEL_TYPE_ID",
+            "MONTH_NO",
+            "median_days_in_port",
+            "p10",
+            "p90",
+            "n_obs",
+        ]]
         return df
     g = (
         pc_trim.groupby(keys, dropna=False)
@@ -198,13 +231,13 @@ lookup = lookup_all.drop_duplicates(subset=key_cols, keep="first").reset_index(d
 
 # ---- Write outputs ----
 lookup = lookup[key_cols + ["median_days_in_port", "n_obs", "specificity_score", "level"]]
-lookup.to_parquet(DER / "port_turnaround_lookup.parquet", index=False)
+try_write_parquet(lookup, DER / "port_turnaround_lookup.parquet")
 lookup.to_csv(DER / "port_turnaround_lookup.csv", index=False)
 
 # ---- QA snapshot ----
 qa = (
     pc_trim.assign(BIN=lambda d: pd.cut(d["DAYS_IN_PORT"], bins=[0, 0.5, 1, 2, 3, 5, 10], include_lowest=True))
-    .groupby("BIN")
+    .groupby("BIN", observed=False)
     .size()
     .reset_index(name="n")
 )

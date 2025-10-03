@@ -1,0 +1,29 @@
+Port turnaround training dataset — overview
+Rows: 80
+
+Column dtypes:
+  PORT_CALL_ID: int64
+  VOYAGE_ID: int64
+  PORT_ID: float64
+  TERMINAL_ID: float64
+  IS_BALLAST: float64
+  VESSEL_ID: float64
+  VESSEL_TYPE_ID: float64
+  MONTH_NO: float64
+  HAS_CANAL_PASSAGE: float64
+  DWT_SUMMER: float64
+  DRAFT_SUMMER: float64
+  LOA: float64
+  BEAM: float64
+  DAYS_IN_PORT: float64
+  COMMODITY_ID: float64
+  COMMODITY_GROUP_ID: float64
+  COMMODITY_CODE: float64
+  DAYS_STOPPAGES: int64
+  DAYS_EXTRA_IN_PORT: float64
+
+Null ratios (key columns):
+  VESSEL_TYPE_ID: 13.75%
+  IS_BALLAST: 100.00%
+  TERMINAL_ID: 100.00%
+  COMMODITY_ID: 22.50%

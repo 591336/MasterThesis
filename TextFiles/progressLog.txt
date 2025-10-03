@@ -1,0 +1,25 @@
+2025-10-03T10:53:15+02:00 — Port turnaround data assembly refresh
+  • Updated `pyproject.toml` to include `pyarrow` in core dependencies so parquet exports can run cross-platform.
+  • Added `try_write_parquet` helpers in `Models/build_port_turnaround_dataset.py` and `Models/port_turnaround_lookup.py` to degrade gracefully when parquet engines are unavailable.
+  • Executed `.venv/bin/python Models/build_port_turnaround_dataset.py`; CSV regenerated with 80 rows, parquet skipped pending engine install. Logged outcome in `contextHelper.txt` (Step 1 checklist item 1 completed).
+ • Observed Pandas `DataFrameGroupBy.apply` deprecation warning; earmarked for later cleanup during preprocessing polish.
+
+2025-10-03T10:58:18+02:00 — QA overview + lightweight figures
+  • Authored `QA/port_turnaround_dataset_qa.py` to regenerate schema stats and produce SVG outputs without external plotting deps.
+  • Generated `DataSets/Derived/QA/port_turnaround_training_overview.txt` documenting dtypes and null ratios (TERMINAL_ID ≈99% missing, VESSEL_TYPE_ID ≈14%).
+ • Saved thesis-ready charts: `DataSets/Derived/QA/figures/port_turnaround_days_in_port_hist.svg` and `.../port_turnaround_missingness.svg`.
+ • Updated `contextHelper.txt` (Step 1 checklist item 2 marked complete with references to generated artefacts).
+
+2025-10-03T11:31:38+02:00 — Documented current cleaning strategy
+  • Captured the applied preprocessing choices in `TextFiles/contextHelper.txt` (column normalization, numeric coercion, duration bounds, intra-group trimming, vessel-type backfill, optional cargo handling).
+  • Rationale notes emphasise robustness (remove implausible durations, curb outlier impact) while retaining traceability for thesis methodology.
+
+2025-10-03T11:51:31+02:00 — Stabilised port turnaround lookup build
+  • Adjusted trimming pipeline to use `include_groups=False` without losing key fields (re-joined group columns) and made global fallback aggregation explicit.
+  • Suppressed pandas future warnings by parameterising QA groupbys and added resilience to datasets script (`Models/build_port_turnaround_dataset.py`) apply call.
+  • Verified `Models/port_turnaround_lookup.py` executes cleanly, emitting 7 lookup rows and QA bins without warnings.
+
+2025-10-03T12:57:34+02:00 — Lookup QA summary & coverage analysis
+  • Added `QA/port_turnaround_lookup_qa.py` to generate a single SVG combining duration bins and fallback-level row counts for the thesis.
+  • Updated `TextFiles/runGuide.txt` with the new command so the figure is easy to reproduce.
+  • Analysed lookup coverage: only two ports with ≥3 observations each (n=33 and n=30) and one vessel type; global fallback retains all 80 records, suggesting the dataset is small but trimming is not the bottleneck (null terminal IDs limit specificity).

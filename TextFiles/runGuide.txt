@@ -1,0 +1,25 @@
+Run Guide — MasterThesis project
+
+Environment setup
+  1. Create or refresh the local venv via `uv sync` (installs core deps incl. pandas, pyarrow, matplotlib).
+  2. Activate the environment (`source .venv/bin/activate`) when running commands manually.
+
+Port turnaround dataset pipeline
+  • Command: `uv run python Models/build_port_turnaround_dataset.py`
+    - Outputs: `DataSets/Derived/port_turnaround_training.csv` (always) and `.parquet` when a parquet engine is installed.
+    - Notes: Script emits QA counts at the end and warns if parquet export is skipped (install `pyarrow` or `fastparquet`).
+
+Port turnaround lookup generation
+  • Prerequisite: Latest `port_turnaround_training.csv` from the step above.
+  • Command: `uv run python Models/port_turnaround_lookup.py`
+    - Outputs: `DataSets/Derived/port_turnaround_lookup.csv` plus `.parquet` when supported.
+
+QA artefacts for thesis figures
+  • Command: `uv run python QA/port_turnaround_dataset_qa.py`
+    - Outputs: `DataSets/Derived/QA/port_turnaround_training_overview.txt` with schema stats and SVG charts in `DataSets/Derived/QA/figures/`.
+  • Command: `uv run python QA/port_turnaround_lookup_qa.py`
+    - Outputs: combined lookup summary SVG at `DataSets/Derived/QA/figures/port_turnaround_lookup_summary.svg` (duration bins + fallback levels).
+
+General tips
+  • Use `.venv/bin/python` if running commands directly from the venv without `uv` (e.g., inside CI or constrained shells).
+  • Commit generated figures/text outputs to track data snapshots referenced in the thesis.

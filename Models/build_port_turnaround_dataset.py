@@ -43,6 +43,18 @@ def load_csv(name: str) -> pd.DataFrame:
     return df
 
 
+def try_write_parquet(df: pd.DataFrame, path: Path) -> bool:
+    """Best-effort parquet export with a helpful message when pyarrow/fastparquet is missing."""
+    try:
+        df.to_parquet(path, index=False)
+        return True
+    except ImportError:
+        print(
+            f"Skipping parquet output ({path.name}): install 'pyarrow' or 'fastparquet' to enable parquet exports."
+        )
+        return False
+
+
 def main():
     # ---- Load mandatory inputs ----
     pc = load_csv("port_calls_completed_asof_2025-12-31.csv")
@@ -166,7 +178,9 @@ def main():
 
     group_keys = [k for k in ["PORT_ID", "TERMINAL_ID", "IS_BALLAST"] if k in df.columns]
     if group_keys:
-        df = df.groupby(group_keys, group_keys=False, dropna=False).apply(trim_group)
+        df = df.groupby(group_keys, group_keys=False, dropna=False).apply(
+            trim_group, include_groups=False
+        )
 
     # ---- Final column set for the training dataset ----
     keep = [
@@ -201,7 +215,7 @@ def main():
     out_csv = DER / "port_turnaround_training.csv"
     out_par = DER / "port_turnaround_training.parquet"
     df.to_csv(out_csv, index=False)
-    df.to_parquet(out_par, index=False)
+    try_write_parquet(df, out_par)
 
     # QA: counts per coarse grouping to see where you have support
     qa = (
