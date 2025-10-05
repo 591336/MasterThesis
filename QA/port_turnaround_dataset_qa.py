@@ -20,6 +20,11 @@ FIG_DIR = QA_DIR / "figures"
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 
 
+DAYS_IN_PORT_LOWER = 0.04
+DAYS_IN_PORT_UPPER = 10.0
+KEY_COLUMNS = ["VESSEL_TYPE_ID", "IS_BALLAST", "TERMINAL_ID", "COMMODITY_ID"]
+
+
 def load_training() -> pd.DataFrame:
     """Load the derived training CSV."""
     path = DER / "port_turnaround_training.csv"
@@ -29,16 +34,15 @@ def load_training() -> pd.DataFrame:
 def write_text_overview(df: pd.DataFrame) -> None:
     """Persist a human-friendly overview (counts, dtypes, null ratios)."""
     overview_path = QA_DIR / "port_turnaround_training_overview.txt"
-    key_cols = ["VESSEL_TYPE_ID", "IS_BALLAST", "TERMINAL_ID", "COMMODITY_ID"]
     lines = [
-        "Port turnaround training dataset — overview",
+        "Port turnaround training dataset - overview",
         f"Rows: {len(df):,}",
         "",
         "Column dtypes:",
     ]
     lines.extend(f"  {col}: {dtype}" for col, dtype in df.dtypes.items())
     lines.extend(["", "Null ratios (key columns):"])
-    for col in key_cols:
+    for col in KEY_COLUMNS:
         if col in df:
             ratio = df[col].isna().mean()
             lines.append(f"  {col}: {ratio:.2%}")
@@ -46,6 +50,47 @@ def write_text_overview(df: pd.DataFrame) -> None:
             lines.append(f"  {col}: column missing")
     lines.append("")
     overview_path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def write_guardrail_stats(df: pd.DataFrame) -> Path:
+    """Summarise DAYS_IN_PORT distribution and guardrail breaches."""
+    path = QA_DIR / "port_turnaround_training_guardrails.txt"
+    if "DAYS_IN_PORT" not in df:
+        path.write_text("DAYS_IN_PORT column missing", encoding="utf-8")
+        return path
+
+    values = pd.to_numeric(df["DAYS_IN_PORT"], errors="coerce").dropna()
+    lines = [
+        "DAYS_IN_PORT guardrail check",
+        f"Observations (non-null): {len(values):,}",
+    ]
+    if values.empty:
+        lines.append("No non-null values available.")
+    else:
+        stats = {
+            "min": values.min(),
+            "p05": values.quantile(0.05),
+            "p25": values.quantile(0.25),
+            "median": values.quantile(0.5),
+            "p75": values.quantile(0.75),
+            "p95": values.quantile(0.95),
+            "max": values.max(),
+        }
+        lines.append("")
+        lines.append("Key percentiles:")
+        for label in ["min", "p05", "p25", "median", "p75", "p95", "max"]:
+            lines.append(f"  {label}: {stats[label]:.4f}")
+        below = int((values < DAYS_IN_PORT_LOWER).sum())
+        above = int((values > DAYS_IN_PORT_UPPER).sum())
+        lines.append("")
+        lines.append(
+            f"Guardrail: {DAYS_IN_PORT_LOWER} <= DAYS_IN_PORT <= {DAYS_IN_PORT_UPPER}"
+        )
+        lines.append(f"  Below lower bound: {below}")
+        lines.append(f"  Above upper bound: {above}")
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def _render_svg_bars(
@@ -108,12 +153,61 @@ def _render_svg_bars(
     out_path.write_text("\n".join(svg_lines), encoding="utf-8")
 
 
+def summarize_missing(
+    df: pd.DataFrame,
+    available: list[str],
+    group_cols: list[str],
+    filename: str,
+) -> Path:
+    """Aggregate missingness ratios for `available` columns grouped by `group_cols`."""
+    indicator = df[available].isna().astype(float).add_suffix("_missing_ratio")
+    combined = pd.concat([df[group_cols], indicator], axis=1)
+    grouped = combined.groupby(group_cols, dropna=False)
+    summary = grouped.mean(numeric_only=True).reset_index()
+    summary["n_obs"] = grouped.size().to_numpy()
+    summary.sort_values("n_obs", ascending=False, inplace=True)
+    path = QA_DIR / filename
+    summary.to_csv(path, index=False)
+    return path
+
+
+def write_missingness_tables(df: pd.DataFrame) -> Tuple[Path, ...]:
+    """Export CSV summaries of missingness grouped by port and by port/terminal."""
+    available = [col for col in KEY_COLUMNS if col in df.columns]
+    outputs: list[Path] = []
+    if not available or "PORT_ID" not in df.columns:
+        path = QA_DIR / "port_turnaround_missingness_by_port.csv"
+        path.write_text("Required columns missing for missingness summary", encoding="utf-8")
+        return (path,)
+
+    outputs.append(
+        summarize_missing(
+            df=df,
+            available=available,
+            group_cols=["PORT_ID"],
+            filename="port_turnaround_missingness_by_port.csv",
+        )
+    )
+
+    if "TERMINAL_ID" in df.columns:
+        outputs.append(
+            summarize_missing(
+                df=df,
+                available=available,
+                group_cols=["PORT_ID", "TERMINAL_ID"],
+                filename="port_turnaround_missingness_by_port_terminal.csv",
+            )
+        )
+
+    return tuple(outputs)
+
+
 def write_histogram(df: pd.DataFrame) -> Path:
     """Generate an SVG histogram for DAYS_IN_PORT."""
     values = df["DAYS_IN_PORT"].dropna().to_numpy()
     bins = np.linspace(0, 10, 11)
     counts, edges = np.histogram(values, bins=bins)
-    labels = [f"{edges[i]:.1f}–{edges[i + 1]:.1f}" for i in range(len(edges) - 1)]
+    labels = [f"{edges[i]:.1f}-{edges[i + 1]:.1f}" for i in range(len(edges) - 1)]
     out_path = FIG_DIR / "port_turnaround_days_in_port_hist.svg"
     _render_svg_bars(
         title="DAYS_IN_PORT distribution",
@@ -127,10 +221,9 @@ def write_histogram(df: pd.DataFrame) -> Path:
 
 def write_missingness_chart(df: pd.DataFrame) -> Path:
     """Generate an SVG bar chart for null ratios in key columns."""
-    key_cols = ["VESSEL_TYPE_ID", "IS_BALLAST", "TERMINAL_ID", "COMMODITY_ID"]
     labels = []
     values = []
-    for col in key_cols:
+    for col in KEY_COLUMNS:
         if col in df:
             labels.append(col)
             values.append(df[col].isna().mean() * 100)
@@ -149,12 +242,17 @@ def write_missingness_chart(df: pd.DataFrame) -> Path:
 def main() -> None:
     df = load_training()
     write_text_overview(df)
+    guardrail_path = write_guardrail_stats(df)
+    missingness_tables = write_missingness_tables(df)
     hist_path = write_histogram(df)
-    miss_path = write_missingness_chart(df)
+    miss_chart_path = write_missingness_chart(df)
     print("Generated artefacts:")
-    print(f"  - {hist_path.relative_to(ROOT)}")
-    print(f"  - {miss_path.relative_to(ROOT)}")
     print(f"  - {(QA_DIR / 'port_turnaround_training_overview.txt').relative_to(ROOT)}")
+    print(f"  - {guardrail_path.relative_to(ROOT)}")
+    for path in missingness_tables:
+        print(f"  - {path.relative_to(ROOT)}")
+    print(f"  - {hist_path.relative_to(ROOT)}")
+    print(f"  - {miss_chart_path.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

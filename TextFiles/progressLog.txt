@@ -1,25 +1,48 @@
-2025-10-03T10:53:15+02:00 — Port turnaround data assembly refresh
-  • Updated `pyproject.toml` to include `pyarrow` in core dependencies so parquet exports can run cross-platform.
-  • Added `try_write_parquet` helpers in `Models/build_port_turnaround_dataset.py` and `Models/port_turnaround_lookup.py` to degrade gracefully when parquet engines are unavailable.
-  • Executed `.venv/bin/python Models/build_port_turnaround_dataset.py`; CSV regenerated with 80 rows, parquet skipped pending engine install. Logged outcome in `contextHelper.txt` (Step 1 checklist item 1 completed).
- • Observed Pandas `DataFrameGroupBy.apply` deprecation warning; earmarked for later cleanup during preprocessing polish.
+2025-10-03T10:53:15+02:00 - Port turnaround data assembly refresh
+  - Updated `pyproject.toml` to include `pyarrow` in core dependencies so parquet exports can run cross-platform.
+  - Added `try_write_parquet` helpers in `Models/build_port_turnaround_dataset.py` and `Models/port_turnaround_lookup.py` to degrade gracefully when parquet engines are unavailable.
+  - Executed `.venv/bin/python Models/build_port_turnaround_dataset.py`; CSV regenerated with 80 rows, parquet skipped pending engine install. Logged outcome in `contextHelper.txt` (Step 1 checklist item 1 completed).
+  - Observed Pandas `DataFrameGroupBy.apply` deprecation warning; earmarked for later cleanup during preprocessing polish.
 
-2025-10-03T10:58:18+02:00 — QA overview + lightweight figures
-  • Authored `QA/port_turnaround_dataset_qa.py` to regenerate schema stats and produce SVG outputs without external plotting deps.
-  • Generated `DataSets/Derived/QA/port_turnaround_training_overview.txt` documenting dtypes and null ratios (TERMINAL_ID ≈99% missing, VESSEL_TYPE_ID ≈14%).
- • Saved thesis-ready charts: `DataSets/Derived/QA/figures/port_turnaround_days_in_port_hist.svg` and `.../port_turnaround_missingness.svg`.
- • Updated `contextHelper.txt` (Step 1 checklist item 2 marked complete with references to generated artefacts).
+2025-10-03T10:58:18+02:00 - QA overview + lightweight figures
+  - Authored `QA/port_turnaround_dataset_qa.py` to regenerate schema stats and produce SVG outputs without external plotting deps.
+  - Generated `DataSets/Derived/QA/port_turnaround_training_overview.txt` documenting dtypes and null ratios (TERMINAL_ID ~99% missing, VESSEL_TYPE_ID ~14%).
+  - Saved thesis-ready charts: `DataSets/Derived/QA/figures/port_turnaround_days_in_port_hist.svg` and `.../port_turnaround_missingness.svg`.
+  - Updated `contextHelper.txt` (Step 1 checklist item 2 marked complete with references to generated artefacts).
 
-2025-10-03T11:31:38+02:00 — Documented current cleaning strategy
-  • Captured the applied preprocessing choices in `TextFiles/contextHelper.txt` (column normalization, numeric coercion, duration bounds, intra-group trimming, vessel-type backfill, optional cargo handling).
-  • Rationale notes emphasise robustness (remove implausible durations, curb outlier impact) while retaining traceability for thesis methodology.
+2025-10-03T11:31:38+02:00 - Documented current cleaning strategy
+  - Captured the applied preprocessing choices in `TextFiles/contextHelper.txt` (column normalization, numeric coercion, duration bounds, intra-group trimming, vessel-type backfill, optional cargo handling).
+  - Rationale notes emphasise robustness (remove implausible durations, curb outlier impact) while retaining traceability for thesis methodology.
 
-2025-10-03T11:51:31+02:00 — Stabilised port turnaround lookup build
-  • Adjusted trimming pipeline to use `include_groups=False` without losing key fields (re-joined group columns) and made global fallback aggregation explicit.
-  • Suppressed pandas future warnings by parameterising QA groupbys and added resilience to datasets script (`Models/build_port_turnaround_dataset.py`) apply call.
-  • Verified `Models/port_turnaround_lookup.py` executes cleanly, emitting 7 lookup rows and QA bins without warnings.
+2025-10-03T11:51:31+02:00 - Stabilised port turnaround lookup build
+  - Adjusted trimming pipeline to use `include_groups=False` without losing key fields (re-joined group columns) and made global fallback aggregation explicit.
+  - Suppressed pandas future warnings by parameterising QA groupbys and added resilience to datasets script (`Models/build_port_turnaround_dataset.py`) apply call.
+  - Verified `Models/port_turnaround_lookup.py` executes cleanly, emitting 7 lookup rows and QA bins without warnings.
 
-2025-10-03T12:57:34+02:00 — Lookup QA summary & coverage analysis
-  • Added `QA/port_turnaround_lookup_qa.py` to generate a single SVG combining duration bins and fallback-level row counts for the thesis.
-  • Updated `TextFiles/runGuide.txt` with the new command so the figure is easy to reproduce.
-  • Analysed lookup coverage: only two ports with ≥3 observations each (n=33 and n=30) and one vessel type; global fallback retains all 80 records, suggesting the dataset is small but trimming is not the bottleneck (null terminal IDs limit specificity).
+2025-10-03T12:57:34+02:00 - Lookup QA summary & coverage analysis
+  - Added `QA/port_turnaround_lookup_qa.py` to generate a single SVG combining duration bins and fallback-level row counts for the thesis.
+  - Updated `TextFiles/runGuide.txt` with the new command so the figure is easy to reproduce.
+  - Analysed lookup coverage: only two ports with >=3 observations each (n=33 and n=30) and one vessel type; global fallback retains all 80 records, suggesting the dataset is small but trimming is not the bottleneck (null terminal IDs limit specificity).
+
+2025-10-05T15:26:26+02:00 - Cross-platform developer setup
+  - Refreshed `README.md` with uv-based bootstrap instructions for macOS/Linux and added a dedicated Windows flow (winget install, interpreter path, PowerShell execution policy tip).
+  - Noted persistent PowerShell alias warning (`gl`) so future runs can clean the user profile to silence noise before scripting automation.
+  - Planned updates to `TextFiles/runGuide.txt` and `TextFiles/contextHelper.txt` to mirror Windows-specific guidance and keep thesis documentation aligned with the repo.
+
+2025-10-05T15:56:54+02:00 - DAYS_IN_PORT guardrail QA scaffolding
+  - Extended `QA/port_turnaround_dataset_qa.py` to emit percentiles and guardrail breach counts into `DataSets/Derived/QA/port_turnaround_training_guardrails.txt`.
+  - Added explicit lower/upper bound constants so thesis reporting matches the preprocessing rationale.
+  - Asked Rovik to run `uv run python QA/port_turnaround_dataset_qa.py` on Windows to regenerate QA outputs and confirm no values breach the [0.04, 10] day window.
+2025-10-05T16:03:52+02:00 - DAYS_IN_PORT guardrail QA results
+  - Ran uv run python QA/port_turnaround_dataset_qa.py; histogram/missingness SVGs refreshed and overview text regenerated.
+  - Guardrail report confirms non-null sample = 80, min 0.2000 days, max 5.9785 days, zero breaches outside [0.04, 10].
+  - Logged completion of Step 1 item 3 in TextFiles/contextHelper.txt.
+
+2025-10-05T16:10:00+02:00 - Missingness audit scaffolding
+  - Extended QA/port_turnaround_dataset_qa.py to export per-port and per-port/terminal null-ratio tables for key fields.
+  - Refreshed run guide and context helper with the new QA artefacts and instructions for Step 1 item 4.
+  - Requested Rovik rerun uv run python QA/port_turnaround_dataset_qa.py and review the CSV outputs before logging findings.
+
+2025-10-05T16:18:12+02:00 - Missingness tables fix
+  - Restructured `QA/port_turnaround_dataset_qa.py` missingness aggregation to avoid column collisions by averaging explicit is-null indicators; CSVs now write successfully.
+  - Asked Rovik to rerun `uv run python QA/port_turnaround_dataset_qa.py` and inspect the per-port/per-terminal outputs before logging Step 1 item 4 findings.

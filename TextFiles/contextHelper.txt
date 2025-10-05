@@ -1,35 +1,41 @@
-Port turnaround model — Milestones
+Port turnaround model - Milestones
 
 Step 1. Dataset assembly (in progress)
 
  Exported port_calls, voyages, vessels, cargo, commodity from DB (cutoff 31-12-2024).
 
- Wrote Models/build_port_turnaround_dataset.py to join & clean.
+ Wrote Models/build_port_turnaround_dataset.py to join and clean.
 
  Current data-cleaning decisions (reviewed with Codex):
-    • Columns are upper-cased on load to simplify joins across heterogeneous extracts.
-    • Mandatory numeric fields coerced with `pd.to_numeric(..., errors="coerce")` to guard against stray string values while preserving nulls for later auditing.
-    • `DAYS_IN_PORT` bounded to [0.04, 10] days to remove implausible stays (<1 h or >10 d) before modelling.
-    • Within-group trimming (`quantile(0.05)`–`0.95`) over (PORT_ID, TERMINAL_ID, IS_BALLAST) to cap extreme durations that would distort medians.
-    • Missing `VESSEL_TYPE_ID` values backfilled from the vessel reference table; optional cargo/commodity tables treated as empty when absent so the pipeline still runs.
+    - Columns are upper-cased on load to simplify joins across heterogeneous extracts.
+    - Mandatory numeric fields coerced with `pd.to_numeric(..., errors="coerce")` to guard against stray string values while preserving nulls for later auditing.
+    - `DAYS_IN_PORT` bounded to [0.04, 10] days to remove implausible stays (<1 h or >10 d) before modelling.
+    - Within-group trimming (`quantile(0.05)`-`0.95`) over (PORT_ID, TERMINAL_ID, IS_BALLAST) to cap extreme durations that would distort medians.
+    - Missing `VESSEL_TYPE_ID` values backfilled from the vessel reference table; optional cargo/commodity tables treated as empty when absent so the pipeline still runs.
 
- QA & exploration plan for `port_turnaround_training`:
+ Environment notes:
+    - README.md and TextFiles/runGuide.txt (2025-10-05) document uv-based setup for macOS/Linux and Windows (winget install, interpreter paths, PowerShell execution policy guidance).
+    - Persistent PowerShell warning about alias `gl` needs cleanup in the user profile before scripting automation.
 
-[x] 1. File availability & freshness
+ QA and exploration plan for `port_turnaround_training`:
+
+[x] 1. File availability and freshness
     - `Models/build_port_turnaround_dataset.py` rerun via `.venv/bin/python` (parquet write now optional; install `pyarrow` to re-enable).
     - `DataSets/Derived/port_turnaround_training.csv` refreshed (80 rows). Parquet skipped by design when engine missing.
 
-[x] 2. Schema & type spot-check
-    - `QA/port_turnaround_dataset_qa.py` writes `DataSets/Derived/QA/port_turnaround_training_overview.txt` with dtypes + null ratios (TERMINAL_ID 98.75% missing; VESSEL_TYPE_ID 13.75%; COMMODITY_ID 22.5%).
+[x] 2. Schema and type spot-check
+    - `QA/port_turnaround_dataset_qa.py` writes `DataSets/Derived/QA/port_turnaround_training_overview.txt` with dtypes and null ratios (TERMINAL_ID 98.75% missing; VESSEL_TYPE_ID 13.75%; COMMODITY_ID 22.5%).
     - Figures saved to `DataSets/Derived/QA/figures/port_turnaround_days_in_port_hist.svg` and `.../port_turnaround_missingness.svg` for thesis-ready visuals.
 
-[ ] 3. DAYS_IN_PORT distribution guardrails
-    - Verify all values stay within the intended [0.04, 10] day window; report min/max and percentiles.
-    - Flag counts outside that range (should be zero after trimming).
+[x] 3. DAYS_IN_PORT distribution guardrails (2025-10-05 run via `uv run python QA/port_turnaround_dataset_qa.py`)
+    - `DataSets/Derived/QA/port_turnaround_training_guardrails.txt` reports min 0.2000, median 1.2083, max 5.9785.
+    - Guardrail breaches: 0 below 0.04 days, 0 above 10.0 days. No follow-up required.
 
 [ ] 4. Missingness audit on key fields
-    - Compute null ratios for `VESSEL_TYPE_ID`, `IS_BALLAST`, `TERMINAL_ID`, `COMMODITY_ID`.
-    - Summarise by port to see if missingness clusters in specific locations.
+    - Re-run `uv run python QA/port_turnaround_dataset_qa.py` (2025-10-05 version or later) to emit:
+      * `DataSets/Derived/QA/port_turnaround_missingness_by_port.csv`
+      * `DataSets/Derived/QA/port_turnaround_missingness_by_port_terminal.csv`
+    - Review per-port/terminal null ratios (columns suffixed `_missing_ratio`) for `VESSEL_TYPE_ID`, `IS_BALLAST`, `TERMINAL_ID`, `COMMODITY_ID`; capture notable hotspots and data-quality actions below once confirmed.
 
 [ ] 5. Group coverage review
     - Reproduce counts per (`PORT_ID`, `TERMINAL_ID`, `IS_BALLAST`) from `port_turnaround_training_counts.csv`.
@@ -56,7 +62,7 @@ Step 2. Lookup model
 
 Global median.
 
- Apply min support (≥3 obs).
+ Apply min support (>=3 obs).
 
  Clamp results to [0.04, 10] days.
 
@@ -88,14 +94,15 @@ port_turnaround_lookup.csv (ready for deterministic solver).
 
 get_turnaround_time() function.
 
-Validation plots & QA counts.
+Validation plots and QA counts.
 
 
 
 ---
 
 
-Sailing Time Model — Milestones
+
+Sailing Time Model - Milestones
 Step 1. Dataset assembly
 
  Exported voyages_completed_asof_2025-12-31.csv already available.
@@ -112,7 +119,7 @@ Join with vessels_reference.csv for size features (DWT, DRAFT, LOA, BEAM).
 
 Compute effective hours per nautical mile:
 
-\text{hours_per_nm} = \frac{\text{days\_at\_sea} \times 24}{\text{miles\_ballast} + \text{miles\_loaded}}
+hours_per_nm = (days_at_sea * 24) / (miles_ballast + miles_loaded)
 
 Add derived features:
 
@@ -136,7 +143,7 @@ Step 2. Lookup model
 
 Global.
 
- Apply min support (≥3 obs).
+ Apply min support (>=3 obs).
 
  Clamp results to [0.5, 10] hours/nm (sane bounds).
 
@@ -160,7 +167,7 @@ Finds most specific median hours_per_nm.
 
 Falls back if group too small.
 
-Returns distance_nm × hours_per_nm.
+Returns distance_nm * hours_per_nm.
 
  Integrate into solver preprocessing to compute sailing times for candidate routes.
 
@@ -172,4 +179,4 @@ sailing_time_lookup.csv (ready for solver).
 
 get_sailing_time() function.
 
-Validation plots & QA counts.
+Validation plots and QA counts.
