@@ -1,0 +1,2 @@
+PORT_ID,TERMINAL_ID,VESSEL_TYPE_ID_missing_ratio,IS_BALLAST_missing_ratio,TERMINAL_ID_missing_ratio,COMMODITY_ID_missing_ratio,n_obs
+,,0.1375,1.0,1.0,0.225,80

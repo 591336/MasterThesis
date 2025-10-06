@@ -15,7 +15,6 @@ Step 1. Dataset assembly (in progress)
 
  Environment notes:
     - README.md and TextFiles/runGuide.txt (2025-10-05) document uv-based setup for macOS/Linux and Windows (winget install, interpreter paths, PowerShell execution policy guidance).
-    - Persistent PowerShell warning about alias `gl` needs cleanup in the user profile before scripting automation.
 
  QA and exploration plan for `port_turnaround_training`:
 
