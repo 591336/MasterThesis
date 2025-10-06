@@ -46,3 +46,23 @@
 2025-10-05T16:18:12+02:00 - Missingness tables fix
   - Restructured `QA/port_turnaround_dataset_qa.py` missingness aggregation to avoid column collisions by averaging explicit is-null indicators; CSVs now write successfully.
   - Asked Rovik to rerun `uv run python QA/port_turnaround_dataset_qa.py` and inspect the per-port/per-terminal outputs before logging Step 1 item 4 findings.
+2025-10-05T16:27:00+02:00 - Group coverage QA
+  - Extended `QA/port_turnaround_dataset_qa.py` to export `DataSets/Derived/QA/port_turnaround_group_counts.csv` with n_obs and percentile stats per (PORT_ID, TERMINAL_ID, IS_BALLAST).
+  - Updated run guide and context helper to reference the new coverage report for Step 1 item 5.
+  - Prompted Rovik to rerun the QA script and review low-support groups before documenting mitigation steps.
+2025-10-05T16:38:00+02:00 - Missingness hotspot reporting
+  - Enhanced `QA/port_turnaround_dataset_qa.py` to emit per-column missingness notes (`DataSets/Derived/QA/port_turnaround_missingness_notes.txt`) alongside the existing CSV summaries.
+  - Added explicit hotspot threshold (50%) and limited listings to the top groups per column for thesis-ready commentary.
+  - Cleaned `TextFiles/contextHelper.txt` formatting while capturing the new audit workflow; updated run guide to include the additional artefact.
+2025-10-05T16:45:00+02:00 - Restored port/ballast keys after trimming fix
+  - Reworked groupwise quantile filter in `Models/build_port_turnaround_dataset.py` so group columns persist (uses `transform` mask instead of `groupby().apply(...)`).
+  - Regenerated dataset + QA artefacts; parquet export now succeeds with pyarrow, and missingness notes highlight only real data gaps.
+  - Updated `TextFiles/contextHelper.txt` with missingness & coverage findings (ports 104084/110965 missing terminals; 16 low-support groups).
+2025-10-05T16:48:00+02:00 - Logged follow-up actions
+  - Captured upstream data fixes needed (terminal joins for ports 104084/110965; vessel metadata for small ports) in `TextFiles/contextHelper.txt` Step 1 item 6.
+  - Ready to proceed to Step 2 lookup construction once data refresh plan is in motion.
+2025-10-05T16:50:00+02:00 - Step 1 summary
+  - Bootstrapped cross-platform dev environment (uv, Windows setup), refreshed README/run guide for macOS/Linux/Windows.
+  - Implemented dataset build pipeline with resilient parquet export and upstream trimming fix; dataset regenerates cleanly with `PORT_ID`/`IS_BALLAST` intact and parquet written via pyarrow.
+  - Built QA tooling (overview, guardrail stats, missingness tables/notes, group coverage) and logged findings: missing terminals for ports 104084/110965; sparse vessel/commodity metadata on single-observation ports; 16 low-support groups requiring fallback tiers.
+  - Recorded follow-up actions to address upstream data gaps before rerunning on richer customer extracts.

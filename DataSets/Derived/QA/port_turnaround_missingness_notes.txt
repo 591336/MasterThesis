@@ -1,0 +1,41 @@
+Missingness hotspots
+Threshold: 50% missing
+
+Column: VESSEL_TYPE_ID
+  - [by_port] PORT_ID=100998: 100% missing (n=2)
+  - [by_port] PORT_ID=100156: 100% missing (n=1)
+  - [by_port] PORT_ID=102813: 100% missing (n=1)
+  - [by_port] PORT_ID=100817: 100% missing (n=1)
+  - [by_port] PORT_ID=100775: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100998, TERMINAL_ID=null: 100% missing (n=2)
+  - [by_port_terminal] PORT_ID=100156, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=102813, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100817, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100775, TERMINAL_ID=null: 100% missing (n=1)
+
+Column: IS_BALLAST
+  - No groups exceed threshold
+
+Column: TERMINAL_ID
+  - [by_port] PORT_ID=104084: 100% missing (n=33)
+  - [by_port] PORT_ID=110965: 100% missing (n=30)
+  - [by_port] PORT_ID=100694: 100% missing (n=2)
+  - [by_port] PORT_ID=100998: 100% missing (n=2)
+  - [by_port] PORT_ID=100156: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=104084, TERMINAL_ID=null: 100% missing (n=33)
+  - [by_port_terminal] PORT_ID=110965, TERMINAL_ID=null: 100% missing (n=30)
+  - [by_port_terminal] PORT_ID=100694, TERMINAL_ID=null: 100% missing (n=2)
+  - [by_port_terminal] PORT_ID=100998, TERMINAL_ID=null: 100% missing (n=2)
+  - [by_port_terminal] PORT_ID=100156, TERMINAL_ID=null: 100% missing (n=1)
+
+Column: COMMODITY_ID
+  - [by_port] PORT_ID=100998: 100% missing (n=2)
+  - [by_port] PORT_ID=100156: 100% missing (n=1)
+  - [by_port] PORT_ID=100775: 100% missing (n=1)
+  - [by_port] PORT_ID=100817: 100% missing (n=1)
+  - [by_port] PORT_ID=100385: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100998, TERMINAL_ID=null: 100% missing (n=2)
+  - [by_port_terminal] PORT_ID=100156, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100775, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100817, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100385, TERMINAL_ID=null: 100% missing (n=1)

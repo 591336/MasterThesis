@@ -4,9 +4,9 @@ Rows: 80
 Column dtypes:
   PORT_CALL_ID: int64
   VOYAGE_ID: int64
-  PORT_ID: float64
+  PORT_ID: int64
   TERMINAL_ID: float64
-  IS_BALLAST: float64
+  IS_BALLAST: int64
   VESSEL_ID: float64
   VESSEL_TYPE_ID: float64
   MONTH_NO: float64
@@ -24,6 +24,6 @@ Column dtypes:
 
 Null ratios (key columns):
   VESSEL_TYPE_ID: 13.75%
-  IS_BALLAST: 100.00%
-  TERMINAL_ID: 100.00%
+  IS_BALLAST: 0.00%
+  TERMINAL_ID: 98.75%
   COMMODITY_ID: 22.50%

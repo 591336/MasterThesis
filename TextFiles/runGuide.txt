@@ -24,6 +24,8 @@ QA artefacts for thesis figures
       * `DataSets/Derived/QA/port_turnaround_training_guardrails.txt`
       * `DataSets/Derived/QA/port_turnaround_missingness_by_port.csv`
       * `DataSets/Derived/QA/port_turnaround_missingness_by_port_terminal.csv`
+      * `DataSets/Derived/QA/port_turnaround_missingness_notes.txt`
+      * `DataSets/Derived/QA/port_turnaround_group_counts.csv`
       * SVG charts in `DataSets/Derived/QA/figures/`
   - Command: `uv run python QA/port_turnaround_lookup_qa.py`
     - Outputs: combined lookup summary SVG at `DataSets/Derived/QA/figures/port_turnaround_lookup_summary.svg` (duration bins + fallback levels).

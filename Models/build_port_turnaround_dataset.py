@@ -171,16 +171,14 @@ def main():
 
     # ---- Light outlier trimming within coarse groups (protect medians later) ----
     # Trim inside (PORT_ID, TERMINAL_ID, IS_BALLAST) groups to remove 5% tails.
-    def trim_group(g: pd.DataFrame) -> pd.DataFrame:
-        q05 = g["DAYS_IN_PORT"].quantile(0.05)
-        q95 = g["DAYS_IN_PORT"].quantile(0.95)
-        return g[(g["DAYS_IN_PORT"] >= q05) & (g["DAYS_IN_PORT"] <= q95)]
-
     group_keys = [k for k in ["PORT_ID", "TERMINAL_ID", "IS_BALLAST"] if k in df.columns]
     if group_keys:
-        df = df.groupby(group_keys, group_keys=False, dropna=False).apply(
-            trim_group, include_groups=False
-        )
+        grouped = df.groupby(group_keys, dropna=False)["DAYS_IN_PORT"]
+        q05 = grouped.transform(lambda s: s.quantile(0.05))
+        q95 = grouped.transform(lambda s: s.quantile(0.95))
+        mask = (df["DAYS_IN_PORT"] >= q05) & (df["DAYS_IN_PORT"] <= q95)
+        mask |= q05.isna() | q95.isna()
+        df = df[mask]
 
     # ---- Final column set for the training dataset ----
     keep = [

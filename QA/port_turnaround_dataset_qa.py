@@ -1,13 +1,14 @@
 """QA utilities for the port turnaround training dataset.
 
-Generates a quick textual overview and lightweight SVG charts so the artefacts can
-be embedded directly in the thesis without relying on heavyweight plotting stacks.
+Generates textual summaries and lightweight SVG charts so artefacts can be
+embedded directly in the thesis without heavyweight plotting stacks.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import Iterable, List, Tuple
 
 import numpy as np
 import pandas as pd
@@ -23,6 +24,16 @@ FIG_DIR.mkdir(parents=True, exist_ok=True)
 DAYS_IN_PORT_LOWER = 0.04
 DAYS_IN_PORT_UPPER = 10.0
 KEY_COLUMNS = ["VESSEL_TYPE_ID", "IS_BALLAST", "TERMINAL_ID", "COMMODITY_ID"]
+GROUP_COLUMNS = ["PORT_ID", "TERMINAL_ID", "IS_BALLAST"]
+MISSINGNESS_HOTSPOT_THRESHOLD = 0.50
+MAX_HOTSPOTS_PER_SECTION = 5
+
+
+@dataclass
+class MissingnessTable:
+    label: str
+    path: Path
+    group_cols: Tuple[str, ...]
 
 
 def load_training() -> pd.DataFrame:
@@ -155,51 +166,103 @@ def _render_svg_bars(
 
 def summarize_missing(
     df: pd.DataFrame,
-    available: list[str],
-    group_cols: list[str],
-    filename: str,
-) -> Path:
-    """Aggregate missingness ratios for `available` columns grouped by `group_cols`."""
+    available: List[str],
+    group_cols: Tuple[str, ...],
+) -> pd.DataFrame:
+    """Aggregate missingness ratios for the selected columns grouped by group_cols."""
     indicator = df[available].isna().astype(float).add_suffix("_missing_ratio")
-    combined = pd.concat([df[group_cols], indicator], axis=1)
-    grouped = combined.groupby(group_cols, dropna=False)
+    combined = pd.concat([df[list(group_cols)], indicator], axis=1)
+    grouped = combined.groupby(list(group_cols), dropna=False)
     summary = grouped.mean(numeric_only=True).reset_index()
     summary["n_obs"] = grouped.size().to_numpy()
     summary.sort_values("n_obs", ascending=False, inplace=True)
-    path = QA_DIR / filename
-    summary.to_csv(path, index=False)
-    return path
+    return summary
 
 
-def write_missingness_tables(df: pd.DataFrame) -> Tuple[Path, ...]:
+def write_missingness_tables(
+    df: pd.DataFrame,
+    available: List[str],
+) -> List[MissingnessTable]:
     """Export CSV summaries of missingness grouped by port and by port/terminal."""
-    available = [col for col in KEY_COLUMNS if col in df.columns]
-    outputs: list[Path] = []
+    tables: List[MissingnessTable] = []
     if not available or "PORT_ID" not in df.columns:
         path = QA_DIR / "port_turnaround_missingness_by_port.csv"
         path.write_text("Required columns missing for missingness summary", encoding="utf-8")
-        return (path,)
+        tables.append(MissingnessTable("by_port", path, ("PORT_ID",)))
+        return tables
 
-    outputs.append(
-        summarize_missing(
-            df=df,
-            available=available,
-            group_cols=["PORT_ID"],
-            filename="port_turnaround_missingness_by_port.csv",
-        )
-    )
+    by_port = summarize_missing(df, available, ("PORT_ID",))
+    by_port_path = QA_DIR / "port_turnaround_missingness_by_port.csv"
+    by_port.to_csv(by_port_path, index=False)
+    tables.append(MissingnessTable("by_port", by_port_path, ("PORT_ID",)))
 
     if "TERMINAL_ID" in df.columns:
-        outputs.append(
-            summarize_missing(
-                df=df,
-                available=available,
-                group_cols=["PORT_ID", "TERMINAL_ID"],
-                filename="port_turnaround_missingness_by_port_terminal.csv",
-            )
-        )
+        by_port_terminal = summarize_missing(df, available, ("PORT_ID", "TERMINAL_ID"))
+        by_pt_path = QA_DIR / "port_turnaround_missingness_by_port_terminal.csv"
+        by_port_terminal.to_csv(by_pt_path, index=False)
+        tables.append(MissingnessTable("by_port_terminal", by_pt_path, ("PORT_ID", "TERMINAL_ID")))
 
-    return tuple(outputs)
+    return tables
+
+
+def write_missingness_report(
+    tables: List[MissingnessTable],
+    available: List[str],
+) -> Path:
+    """Highlight missingness hotspots above the configured threshold."""
+    path = QA_DIR / "port_turnaround_missingness_notes.txt"
+    lines = [
+        "Missingness hotspots",
+        f"Threshold: {MISSINGNESS_HOTSPOT_THRESHOLD:.0%} missing",
+        "",
+    ]
+    if not available:
+        lines.append("No key columns available for missingness audit.")
+        path.write_text("\n".join(lines), encoding="utf-8")
+        return path
+
+    def fmt(val: object) -> str:
+        if pd.isna(val):
+            return "null"
+        if isinstance(val, float) and val.is_integer():
+            return str(int(val))
+        return str(val)
+
+    any_hotspots = False
+    for col in available:
+        ratio_col = f"{col}_missing_ratio"
+        lines.append(f"Column: {col}")
+        found_for_col = False
+        for table in tables:
+            if not table.path.exists():
+                continue
+            summary = pd.read_csv(table.path)
+            if ratio_col not in summary:
+                continue
+            hotspots = summary[summary[ratio_col] >= MISSINGNESS_HOTSPOT_THRESHOLD]
+            if hotspots.empty:
+                continue
+            any_hotspots = True
+            found_for_col = True
+            hotspots = hotspots.sort_values(ratio_col, ascending=False).head(MAX_HOTSPOTS_PER_SECTION)
+            for _, row in hotspots.iterrows():
+                group_desc = ", ".join(
+                    f"{gc}={fmt(row.get(gc))}" for gc in table.group_cols
+                )
+                ratio = row[ratio_col]
+                n_obs = int(row.get("n_obs", 0))
+                lines.append(
+                    f"  - [{table.label}] {group_desc}: {ratio:.0%} missing (n={n_obs})"
+                )
+        if not found_for_col:
+            lines.append("  - No groups exceed threshold")
+        lines.append("")
+
+    if not any_hotspots:
+        lines.insert(2, "No groups exceeded the missingness threshold.")
+
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    return path
 
 
 def write_histogram(df: pd.DataFrame) -> Path:
@@ -239,18 +302,53 @@ def write_missingness_chart(df: pd.DataFrame) -> Path:
     return out_path
 
 
+def write_group_counts(df: pd.DataFrame) -> Path:
+    """Summarise coverage per (PORT_ID, TERMINAL_ID, IS_BALLAST)."""
+    missing_cols = [col for col in GROUP_COLUMNS if col not in df.columns]
+    path = QA_DIR / "port_turnaround_group_counts.csv"
+    if missing_cols:
+        path.write_text(
+            f"Required grouping columns missing: {', '.join(missing_cols)}",
+            encoding="utf-8",
+        )
+        return path
+
+    group = df.groupby(GROUP_COLUMNS, dropna=False)
+    summary = (
+        group["DAYS_IN_PORT"].agg(
+            n_obs="size",
+            median_days_in_port="median",
+            p10_days_in_port=lambda s: s.quantile(0.10),
+            p90_days_in_port=lambda s: s.quantile(0.90),
+        )
+        .reset_index()
+        .sort_values("n_obs", ascending=False)
+    )
+    summary.to_csv(path, index=False)
+    return path
+
+
 def main() -> None:
     df = load_training()
+    if "DAYS_IN_PORT" in df:
+        df["DAYS_IN_PORT"] = pd.to_numeric(df["DAYS_IN_PORT"], errors="coerce")
+
     write_text_overview(df)
     guardrail_path = write_guardrail_stats(df)
-    missingness_tables = write_missingness_tables(df)
+    available_key_cols = [col for col in KEY_COLUMNS if col in df.columns]
+    missingness_tables = write_missingness_tables(df, available_key_cols)
+    missingness_report_path = write_missingness_report(missingness_tables, available_key_cols)
+    group_counts_path = write_group_counts(df)
     hist_path = write_histogram(df)
     miss_chart_path = write_missingness_chart(df)
+
     print("Generated artefacts:")
     print(f"  - {(QA_DIR / 'port_turnaround_training_overview.txt').relative_to(ROOT)}")
     print(f"  - {guardrail_path.relative_to(ROOT)}")
-    for path in missingness_tables:
-        print(f"  - {path.relative_to(ROOT)}")
+    for table in missingness_tables:
+        print(f"  - {table.path.relative_to(ROOT)}")
+    print(f"  - {missingness_report_path.relative_to(ROOT)}")
+    print(f"  - {group_counts_path.relative_to(ROOT)}")
     print(f"  - {hist_path.relative_to(ROOT)}")
     print(f"  - {miss_chart_path.relative_to(ROOT)}")
 
