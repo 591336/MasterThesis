@@ -9,7 +9,7 @@ Column dtypes:
   IS_BALLAST: int64
   VESSEL_ID: float64
   VESSEL_TYPE_ID: float64
-  MONTH_NO: float64
+  MONTH_NO: float64 // check if usable for seasonal change
   HAS_CANAL_PASSAGE: float64
   DWT_SUMMER: float64
   DRAFT_SUMMER: float64

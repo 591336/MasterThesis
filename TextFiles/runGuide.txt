@@ -8,27 +8,22 @@ Environment setup
      - Windows: pick `./.venv/Scripts/python.exe` in VS Code or run `.venv\Scripts\Activate.ps1`.
 
 Port turnaround dataset pipeline
-  - Command: `uv run python Models/build_port_turnaround_dataset.py`
-    - Outputs: `DataSets/Derived/port_turnaround_training.csv` (always) and `.parquet` when a parquet engine is installed.
-    - Notes: Script emits QA counts at the end and warns if parquet export is skipped (install `pyarrow` or `fastparquet`).
+  - Command: `uv run python Models/build_port_turnaround_dataset.py [--customer stena]`
+    - Outputs: `DataSets/Derived/NorthernLights/port_turnaround_training.csv` by default, or `DataSets/Derived/Stena/port_turnaround_training.csv` when `--customer stena` is supplied. Parquet is written when an engine is installed.
+    - Notes: Script emits QA counts at the end and warns if parquet export is skipped (install `pyarrow` or `fastparquet`). Omit `--customer` to default to Northern Lights.
 
 Port turnaround lookup generation
   - Prerequisite: Latest `port_turnaround_training.csv` from the step above.
-  - Command: `uv run python Models/port_turnaround_lookup.py`
-    - Outputs: `DataSets/Derived/port_turnaround_lookup.csv` plus `.parquet` when supported.
+  - Command: `uv run python Models/port_turnaround_lookup.py [--customer stena]`
+    - Outputs: `DataSets/Derived/NorthernLights/port_turnaround_lookup.csv` (default) or `DataSets/Derived/Stena/port_turnaround_lookup.csv` when `--customer stena`; parquet written when supported.
 
 QA artefacts for thesis figures
-  - Command: `uv run python QA/port_turnaround_dataset_qa.py`
+  - Command: `uv run python QA/port_turnaround_dataset_qa.py [--customer stena]`
     - Outputs:
-      * `DataSets/Derived/QA/port_turnaround_training_overview.txt`
-      * `DataSets/Derived/QA/port_turnaround_training_guardrails.txt`
-      * `DataSets/Derived/QA/port_turnaround_missingness_by_port.csv`
-      * `DataSets/Derived/QA/port_turnaround_missingness_by_port_terminal.csv`
-      * `DataSets/Derived/QA/port_turnaround_missingness_notes.txt`
-      * `DataSets/Derived/QA/port_turnaround_group_counts.csv`
-      * SVG charts in `DataSets/Derived/QA/figures/`
-  - Command: `uv run python QA/port_turnaround_lookup_qa.py`
-    - Outputs: combined lookup summary SVG at `DataSets/Derived/QA/figures/port_turnaround_lookup_summary.svg` (duration bins + fallback levels).
+      * Northern Lights: `DataSets/Derived/NorthernLights/QA/...`; Stena: `DataSets/Derived/Stena/QA/...` (reports, tables, figures mirror default structure).
+      * Specifically includes overview, guardrails, missingness tables/notes, group counts, and SVG charts.
+  - Command: `uv run python QA/port_turnaround_lookup_qa.py [--customer stena]`
+    - Outputs: combined lookup summary SVG at `DataSets/Derived/NorthernLights/QA/figures/port_turnaround_lookup_summary.svg` (or `DataSets/Derived/Stena/QA/figures/...` when `--customer stena` is supplied).
 
 General tips
   - Prefer `uv run <cmd>` so dependency resolution stays consistent across OSes.

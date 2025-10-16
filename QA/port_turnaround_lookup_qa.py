@@ -5,17 +5,56 @@ Produces a combined SVG summarising duration bins and fallback level coverage.
 
 from __future__ import annotations
 
+import argparse
+import sys
 from pathlib import Path
 from typing import Iterable, Tuple
 
 import pandas as pd
 
-
 ROOT = Path(__file__).resolve().parents[1]
-DER = ROOT / "DataSets" / "Derived"
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+from utils.customer_paths import (
+    CustomerPaths,
+    describe_customers,
+    ensure_customer_dirs,
+    resolve_customer,
+)
+_DEFAULT_PATHS = resolve_customer(None)
+ensure_customer_dirs(_DEFAULT_PATHS)
+DER = _DEFAULT_PATHS.derived_dir
 QA_DIR = DER / "QA"
 FIG_DIR = QA_DIR / "figures"
-FIG_DIR.mkdir(parents=True, exist_ok=True)
+CURRENT_PATHS = _DEFAULT_PATHS
+
+
+def configure_customer(slug: str | None) -> CustomerPaths:
+    """Update global directories for the selected customer."""
+    global DER, QA_DIR, FIG_DIR, CURRENT_PATHS
+    paths = resolve_customer(slug)
+    ensure_customer_dirs(paths)
+    DER = paths.derived_dir
+    QA_DIR = paths.qa_dir
+    FIG_DIR = QA_DIR / "figures"
+    CURRENT_PATHS = paths
+    return paths
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Render lookup QA summary SVGs.")
+    parser.add_argument(
+        "--customer",
+        "-c",
+        help="Customer slug (e.g. 'northernlights', 'stena'). Defaults to northernlights.",
+    )
+    parser.add_argument(
+        "--list-customers",
+        action="store_true",
+        help="Print available customer identifiers and exit.",
+    )
+    return parser.parse_args()
 
 
 def load_lookup_tables() -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -138,11 +177,15 @@ def write_combined_lookup_svg(lookup: pd.DataFrame, qa_bins: pd.DataFrame) -> Pa
 
 
 def main() -> None:
+    args = parse_args()
+    if args.list_customers:
+        print(describe_customers())
+        return
+    paths = configure_customer(args.customer)
     lookup, qa_bins = load_lookup_tables()
     out_path = write_combined_lookup_svg(lookup, qa_bins)
-    print(f"Generated {out_path.relative_to(ROOT)}")
+    print(f"Generated lookup QA for [{paths.key}] -> {out_path.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
     main()
-

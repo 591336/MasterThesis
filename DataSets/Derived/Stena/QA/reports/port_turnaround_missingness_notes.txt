@@ -1,0 +1,41 @@
+Missingness hotspots
+Threshold: 50% missing
+
+Column: VESSEL_TYPE_ID
+  - [by_port] PORT_ID=100744: 100% missing (n=2)
+  - [by_port] PORT_ID=103888: 100% missing (n=1)
+  - [by_port] PORT_ID=110876: 100% missing (n=2)
+  - [by_port] PORT_ID=100946: 100% missing (n=1)
+  - [by_port] PORT_ID=103271: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=103271, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=107748, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=100744, TERMINAL_ID=907609: 100% missing (n=2)
+  - [by_port_terminal] PORT_ID=102035, TERMINAL_ID=915733: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=104434, TERMINAL_ID=null: 100% missing (n=1)
+
+Column: IS_BALLAST
+  - No groups exceed threshold
+
+Column: TERMINAL_ID
+  - [by_port] PORT_ID=103029: 100% missing (n=111)
+  - [by_port] PORT_ID=100651: 100% missing (n=1)
+  - [by_port] PORT_ID=100946: 100% missing (n=1)
+  - [by_port] PORT_ID=101055: 100% missing (n=1)
+  - [by_port] PORT_ID=110331: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=103029, TERMINAL_ID=null: 100% missing (n=111)
+  - [by_port_terminal] PORT_ID=104441, TERMINAL_ID=null: 100% missing (n=2)
+  - [by_port_terminal] PORT_ID=104493, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=104435, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=104434, TERMINAL_ID=null: 100% missing (n=1)
+
+Column: COMMODITY_ID
+  - [by_port] PORT_ID=101095: 100% missing (n=5)
+  - [by_port] PORT_ID=104546: 100% missing (n=1)
+  - [by_port] PORT_ID=102742: 100% missing (n=1)
+  - [by_port] PORT_ID=101973: 100% missing (n=1)
+  - [by_port] PORT_ID=104266: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=101973, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=101095, TERMINAL_ID=null: 100% missing (n=5)
+  - [by_port_terminal] PORT_ID=104266, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=102742, TERMINAL_ID=null: 100% missing (n=1)
+  - [by_port_terminal] PORT_ID=101719, TERMINAL_ID=959440: 100% missing (n=1)

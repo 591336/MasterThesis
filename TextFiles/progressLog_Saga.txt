@@ -1,0 +1,27 @@
+Saga Dataset Progress – 2025-10-16
+==================================
+
+Status
+------
+- Exported Stena raw slices (port calls, voyages, vessels, cargo, commodity) with modelling guardrails; stored under `DataSets/Raw/Stena/`.
+- Captured SQL extracts in `DataSets/Raw/Stena/SQL/` for reproducibility.
+- Terminal coverage remains sparse (≈98% null); fallback tiers will rely on port-level medians.
+
+Row Counts
+----------
+- `port_calls_completed_asof_2025-12-31.csv`: 1,148 rows (10 columns) – includes terminal name when available.
+- `voyages_completed_asof_2025-12-31.csv`: 1,206 rows (18 columns) – voyages completed by 31-Dec-2025 with valid distance/time metrics.
+- `vessels_reference.csv`: 65 rows (14 columns) – active vessel master records with dimensions.
+- `cargo_asof_2025-12-31.csv`: 476 rows (10 columns) – limited to voyages in scope; no load/discharge port IDs in this table.
+- `commodity_reference.csv`: 31 rows (4 columns) – commodity lookup for enrichment.
+
+Notes & Risks
+-------------
+- Terminal IDs are effectively missing; only 22 port calls supply a terminal_id despite the view join. Document in QA artefacts and solver fallbacks.
+- Voyage export excludes legs with zero `DAYS_TOTAL_AT_SEA` or miles outside [20, 12,000]; revisiting thresholds may be needed if key voyages were filtered out.
+
+Next Actions
+------------
+1. Parameterise `build_port_turnaround_dataset.py` to accept a customer slug (e.g., `--customer stena`) and read/write customer-specific folders.
+2. Regenerate derived datasets and QA outputs for Stena once parameterisation is in place.
+3. Update documentation/QA notes to highlight terminal missingness and voyage count differences vs Northern Lights.

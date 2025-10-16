@@ -6,8 +6,8 @@
 
 2025-10-03T10:58:18+02:00 - QA overview + lightweight figures
   - Authored `QA/port_turnaround_dataset_qa.py` to regenerate schema stats and produce SVG outputs without external plotting deps.
-  - Generated `DataSets/Derived/QA/port_turnaround_training_overview.txt` documenting dtypes and null ratios (TERMINAL_ID ~99% missing, VESSEL_TYPE_ID ~14%).
-  - Saved thesis-ready charts: `DataSets/Derived/QA/figures/port_turnaround_days_in_port_hist.svg` and `.../port_turnaround_missingness.svg`.
+  - Generated `DataSets/Derived/NorthernLights/QA/reports/port_turnaround_training_overview.txt` documenting dtypes and null ratios (TERMINAL_ID ~99% missing, VESSEL_TYPE_ID ~14%).
+  - Saved thesis-ready charts: `DataSets/Derived/NorthernLights/QA/figures/port_turnaround_days_in_port_hist.svg` and `.../port_turnaround_missingness.svg`.
   - Updated `contextHelper.txt` (Step 1 checklist item 2 marked complete with references to generated artefacts).
 
 2025-10-03T11:31:38+02:00 - Documented current cleaning strategy
@@ -30,7 +30,7 @@
   - Planned updates to `TextFiles/runGuide.txt` and `TextFiles/contextHelper.txt` to mirror Windows-specific guidance and keep thesis documentation aligned with the repo.
 
 2025-10-05T15:56:54+02:00 - DAYS_IN_PORT guardrail QA scaffolding
-  - Extended `QA/port_turnaround_dataset_qa.py` to emit percentiles and guardrail breach counts into `DataSets/Derived/QA/port_turnaround_training_guardrails.txt`.
+  - Extended `QA/port_turnaround_dataset_qa.py` to emit percentiles and guardrail breach counts into `DataSets/Derived/NorthernLights/QA/reports/port_turnaround_training_guardrails.txt`.
   - Added explicit lower/upper bound constants so thesis reporting matches the preprocessing rationale.
   - Asked Rovik to run `uv run python QA/port_turnaround_dataset_qa.py` on Windows to regenerate QA outputs and confirm no values breach the [0.04, 10] day window.
 2025-10-05T16:03:52+02:00 - DAYS_IN_PORT guardrail QA results
@@ -47,11 +47,11 @@
   - Restructured `QA/port_turnaround_dataset_qa.py` missingness aggregation to avoid column collisions by averaging explicit is-null indicators; CSVs now write successfully.
   - Asked Rovik to rerun `uv run python QA/port_turnaround_dataset_qa.py` and inspect the per-port/per-terminal outputs before logging Step 1 item 4 findings.
 2025-10-05T16:27:00+02:00 - Group coverage QA
-  - Extended `QA/port_turnaround_dataset_qa.py` to export `DataSets/Derived/QA/port_turnaround_group_counts.csv` with n_obs and percentile stats per (PORT_ID, TERMINAL_ID, IS_BALLAST).
+  - Extended `QA/port_turnaround_dataset_qa.py` to export `DataSets/Derived/NorthernLights/QA/tables/port_turnaround_group_counts.csv` with n_obs and percentile stats per (PORT_ID, TERMINAL_ID, IS_BALLAST).
   - Updated run guide and context helper to reference the new coverage report for Step 1 item 5.
   - Prompted Rovik to rerun the QA script and review low-support groups before documenting mitigation steps.
 2025-10-05T16:38:00+02:00 - Missingness hotspot reporting
-  - Enhanced `QA/port_turnaround_dataset_qa.py` to emit per-column missingness notes (`DataSets/Derived/QA/port_turnaround_missingness_notes.txt`) alongside the existing CSV summaries.
+  - Enhanced `QA/port_turnaround_dataset_qa.py` to emit per-column missingness notes (`DataSets/Derived/NorthernLights/QA/reports/port_turnaround_missingness_notes.txt`) alongside the existing CSV summaries.
   - Added explicit hotspot threshold (50%) and limited listings to the top groups per column for thesis-ready commentary.
   - Cleaned `TextFiles/contextHelper.txt` formatting while capturing the new audit workflow; updated run guide to include the additional artefact.
 2025-10-05T16:45:00+02:00 - Restored port/ballast keys after trimming fix
@@ -66,3 +66,14 @@
   - Implemented dataset build pipeline with resilient parquet export and upstream trimming fix; dataset regenerates cleanly with `PORT_ID`/`IS_BALLAST` intact and parquet written via pyarrow.
   - Built QA tooling (overview, guardrail stats, missingness tables/notes, group coverage) and logged findings: missing terminals for ports 104084/110965; sparse vessel/commodity metadata on single-observation ports; 16 low-support groups requiring fallback tiers.
   - Recorded follow-up actions to address upstream data gaps before rerunning on richer customer extracts.
+2025-10-16T08:57:54+02:00 - Stena dataset scaffolding
+  - Created DataSets/Raw/Stena directory to stage new customer extracts.
+  - Ready to run row-count sanity SQLs before exporting full tables.
+2025-10-16T10:05:00+02:00 - Customer-aware dataset + QA tooling
+  - Added reusable customer path resolver (`utils/customer_paths.py`) and CLI flag support (`--customer`) across build, lookup, and QA scripts.
+  - Stena outputs now land in `DataSets/Derived/Stena/...` (reports/tables/figures mirror the default structure); `--customer northernlights` maintains current behaviour.
+  - Updated run guide and context helper to document the flag; future customers can be added by extending the shared mapping.
+2025-10-16T10:45:00+02:00 - Northern Lights artefacts grouped under dedicated directory
+  - Moved legacy Northern Lights outputs into `DataSets/Derived/NorthernLights/` to mirror the Stena layout.
+  - Updated customer path resolver + documentation so default runs point at the new directory while leaving Stena artefacts untouched.
+  - Added `--list-customers` helper across build/lookup/QA scripts for quick discovery of available slugs; README/run guide now reference the multi-customer workflow.

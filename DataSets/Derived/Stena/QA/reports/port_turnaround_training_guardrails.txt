@@ -1,0 +1,15 @@
+DAYS_IN_PORT guardrail check
+Observations (non-null): 1,091
+
+Key percentiles:
+  min: 0.2000
+  p05: 0.2500
+  p25: 0.2500
+  median: 1.2500
+  p75: 2.3208
+  p95: 5.2500
+  max: 9.2496
+
+Guardrail: 0.04 <= DAYS_IN_PORT <= 10.0
+  Below lower bound: 0
+  Above upper bound: 0

@@ -1,0 +1,65 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='960' height='360' viewBox='0 0 960 360'>
+  <style><![CDATA[text { font-family: 'Helvetica, Arial, sans-serif'; }]]></style>
+  <rect x='0' y='0' width='100%' height='100%' fill='white' stroke='black' stroke-width='1' />
+  <text x='250.0' y='40.0' text-anchor='middle' font-size='18'>DAYS_IN_PORT bins</text>
+  <text x='0.0' y='180.0' text-anchor='middle' font-size='12' transform='rotate(-90 0.0 180.0)'>Observations</text>
+  <line x1='40.0' y1='290.0' x2='460.0' y2='290.0' stroke='black' stroke-width='1' />
+  <line x1='40.0' y1='70.0' x2='40.0' y2='290.0' stroke='black' stroke-width='1' />
+  <rect x='40.0' y='70.0' width='61.7' height='220.0' fill='#4c78a8' />
+  <text x='70.8' y='310.0' text-anchor='middle' font-size='12'>(-0.001, 0.5]</text>
+  <text x='70.8' y='64.0' text-anchor='middle' font-size='11'>445</text>
+  <rect x='111.7' y='253.4' width='61.7' height='36.6' fill='#4c78a8' />
+  <text x='142.5' y='310.0' text-anchor='middle' font-size='12'>(0.5, 1.0]</text>
+  <text x='142.5' y='247.4' text-anchor='middle' font-size='11'>74</text>
+  <rect x='183.3' y='189.1' width='61.7' height='100.9' fill='#4c78a8' />
+  <text x='214.2' y='310.0' text-anchor='middle' font-size='12'>(1.0, 2.0]</text>
+  <text x='214.2' y='183.1' text-anchor='middle' font-size='11'>204</text>
+  <rect x='255.0' y='198.5' width='61.7' height='91.5' fill='#4c78a8' />
+  <text x='285.8' y='310.0' text-anchor='middle' font-size='12'>(2.0, 3.0]</text>
+  <text x='285.8' y='192.5' text-anchor='middle' font-size='11'>185</text>
+  <rect x='326.7' y='249.0' width='61.7' height='41.0' fill='#4c78a8' />
+  <text x='357.5' y='310.0' text-anchor='middle' font-size='12'>(3.0, 5.0]</text>
+  <text x='357.5' y='243.0' text-anchor='middle' font-size='11'>83</text>
+  <rect x='398.3' y='246.5' width='61.7' height='43.5' fill='#4c78a8' />
+  <text x='429.2' y='310.0' text-anchor='middle' font-size='12'>(5.0, 10.0]</text>
+  <text x='429.2' y='240.5' text-anchor='middle' font-size='11'>88</text>
+  <line x1='35.0' y1='290.0' x2='40.0' y2='290.0' stroke='black' stroke-width='1' />
+  <text x='30.0' y='294.0' text-anchor='end' font-size='11'>0</text>
+  <line x1='35.0' y1='235.0' x2='40.0' y2='235.0' stroke='black' stroke-width='1' />
+  <text x='30.0' y='239.0' text-anchor='end' font-size='11'>111</text>
+  <line x1='35.0' y1='180.0' x2='40.0' y2='180.0' stroke='black' stroke-width='1' />
+  <text x='30.0' y='184.0' text-anchor='end' font-size='11'>222</text>
+  <line x1='35.0' y1='125.0' x2='40.0' y2='125.0' stroke='black' stroke-width='1' />
+  <text x='30.0' y='129.0' text-anchor='end' font-size='11'>334</text>
+  <line x1='35.0' y1='70.0' x2='40.0' y2='70.0' stroke='black' stroke-width='1' />
+  <text x='30.0' y='74.0' text-anchor='end' font-size='11'>445</text>
+  <text x='710.0' y='40.0' text-anchor='middle' font-size='18'>Lookup rows per level</text>
+  <text x='460.0' y='180.0' text-anchor='middle' font-size='12' transform='rotate(-90 460.0 180.0)'>Row count</text>
+  <line x1='500.0' y1='290.0' x2='920.0' y2='290.0' stroke='black' stroke-width='1' />
+  <line x1='500.0' y1='70.0' x2='500.0' y2='290.0' stroke='black' stroke-width='1' />
+  <rect x='500.0' y='70.0' width='76.0' height='220.0' fill='#4c78a8' />
+  <text x='538.0' y='310.0' text-anchor='middle' font-size='12'>L1</text>
+  <text x='538.0' y='64.0' text-anchor='middle' font-size='11'>89</text>
+  <rect x='586.0' y='117.0' width='76.0' height='173.0' fill='#4c78a8' />
+  <text x='624.0' y='310.0' text-anchor='middle' font-size='12'>L3</text>
+  <text x='624.0' y='111.0' text-anchor='middle' font-size='11'>70</text>
+  <rect x='672.0' y='272.7' width='76.0' height='17.3' fill='#4c78a8' />
+  <text x='710.0' y='310.0' text-anchor='middle' font-size='12'>L4</text>
+  <text x='710.0' y='266.7' text-anchor='middle' font-size='11'>7</text>
+  <rect x='758.0' y='82.4' width='76.0' height='207.6' fill='#4c78a8' />
+  <text x='796.0' y='310.0' text-anchor='middle' font-size='12'>L5</text>
+  <text x='796.0' y='76.4' text-anchor='middle' font-size='11'>84</text>
+  <rect x='844.0' y='287.5' width='76.0' height='2.5' fill='#4c78a8' />
+  <text x='882.0' y='310.0' text-anchor='middle' font-size='12'>L6</text>
+  <text x='882.0' y='281.5' text-anchor='middle' font-size='11'>1</text>
+  <line x1='495.0' y1='290.0' x2='500.0' y2='290.0' stroke='black' stroke-width='1' />
+  <text x='490.0' y='294.0' text-anchor='end' font-size='11'>0</text>
+  <line x1='495.0' y1='235.0' x2='500.0' y2='235.0' stroke='black' stroke-width='1' />
+  <text x='490.0' y='239.0' text-anchor='end' font-size='11'>22</text>
+  <line x1='495.0' y1='180.0' x2='500.0' y2='180.0' stroke='black' stroke-width='1' />
+  <text x='490.0' y='184.0' text-anchor='end' font-size='11'>44</text>
+  <line x1='495.0' y1='125.0' x2='500.0' y2='125.0' stroke='black' stroke-width='1' />
+  <text x='490.0' y='129.0' text-anchor='end' font-size='11'>67</text>
+  <line x1='495.0' y1='70.0' x2='500.0' y2='70.0' stroke='black' stroke-width='1' />
+  <text x='490.0' y='74.0' text-anchor='end' font-size='11'>89</text>
+</svg>

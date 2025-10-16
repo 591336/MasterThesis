@@ -36,6 +36,12 @@ If PowerShell blocks the install script, run PowerShell as Administrator once an
 ## Data / models
 - `DataSets/` and `Models/` are git-ignored stash directories for local assets
 - Keep raw data out of version control unless explicitly scrubbed
+- Customer-aware pipelines (Northern Lights by default):
+  - `uv run python Models/build_port_turnaround_dataset.py [--customer stena]`
+  - `uv run python QA/port_turnaround_dataset_qa.py [--customer stena]`
+  - `uv run python Models/port_turnaround_lookup.py [--customer stena]`
+  - `uv run python QA/port_turnaround_lookup_qa.py [--customer stena]`
+  - Use `--list-customers` with any command to see available identifiers and their directory layout.
 
 ## Tips
 - `uv sync --locked` reads the existing `uv.lock` to keep dependency resolution deterministic

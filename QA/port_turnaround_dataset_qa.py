@@ -6,6 +6,8 @@ embedded directly in the thesis without heavyweight plotting stacks.
 
 from __future__ import annotations
 
+import argparse
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List, Tuple
@@ -13,12 +15,53 @@ from typing import Iterable, List, Tuple
 import numpy as np
 import pandas as pd
 
-
 ROOT = Path(__file__).resolve().parents[1]
-DER = ROOT / "DataSets" / "Derived"
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+from utils.customer_paths import (
+    CustomerPaths,
+    describe_customers,
+    ensure_customer_dirs,
+    resolve_customer,
+)
+_DEFAULT_PATHS = resolve_customer(None)
+ensure_customer_dirs(_DEFAULT_PATHS)
+DER = _DEFAULT_PATHS.derived_dir
 QA_DIR = DER / "QA"
 FIG_DIR = QA_DIR / "figures"
-FIG_DIR.mkdir(parents=True, exist_ok=True)
+TABLES_DIR = QA_DIR / "tables"
+REPORTS_DIR = QA_DIR / "reports"
+CURRENT_PATHS = _DEFAULT_PATHS
+
+
+def configure_customer(slug: str | None) -> CustomerPaths:
+    """Update global directories for the selected customer."""
+    global DER, QA_DIR, FIG_DIR, TABLES_DIR, REPORTS_DIR, CURRENT_PATHS
+    paths = resolve_customer(slug)
+    ensure_customer_dirs(paths)
+    DER = paths.derived_dir
+    QA_DIR = paths.qa_dir
+    FIG_DIR = QA_DIR / "figures"
+    TABLES_DIR = QA_DIR / "tables"
+    REPORTS_DIR = QA_DIR / "reports"
+    CURRENT_PATHS = paths
+    return paths
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Generate QA artefacts for port turnaround training data.")
+    parser.add_argument(
+        "--customer",
+        "-c",
+        help="Customer slug (e.g. 'northernlights', 'stena'). Defaults to northernlights.",
+    )
+    parser.add_argument(
+        "--list-customers",
+        action="store_true",
+        help="Print available customer identifiers and exit.",
+    )
+    return parser.parse_args()
 
 
 DAYS_IN_PORT_LOWER = 0.04
@@ -44,7 +87,7 @@ def load_training() -> pd.DataFrame:
 
 def write_text_overview(df: pd.DataFrame) -> None:
     """Persist a human-friendly overview (counts, dtypes, null ratios)."""
-    overview_path = QA_DIR / "port_turnaround_training_overview.txt"
+    overview_path = REPORTS_DIR / "port_turnaround_training_overview.txt"
     lines = [
         "Port turnaround training dataset - overview",
         f"Rows: {len(df):,}",
@@ -65,7 +108,7 @@ def write_text_overview(df: pd.DataFrame) -> None:
 
 def write_guardrail_stats(df: pd.DataFrame) -> Path:
     """Summarise DAYS_IN_PORT distribution and guardrail breaches."""
-    path = QA_DIR / "port_turnaround_training_guardrails.txt"
+    path = REPORTS_DIR / "port_turnaround_training_guardrails.txt"
     if "DAYS_IN_PORT" not in df:
         path.write_text("DAYS_IN_PORT column missing", encoding="utf-8")
         return path
@@ -186,19 +229,19 @@ def write_missingness_tables(
     """Export CSV summaries of missingness grouped by port and by port/terminal."""
     tables: List[MissingnessTable] = []
     if not available or "PORT_ID" not in df.columns:
-        path = QA_DIR / "port_turnaround_missingness_by_port.csv"
+        path = TABLES_DIR / "port_turnaround_missingness_by_port.csv"
         path.write_text("Required columns missing for missingness summary", encoding="utf-8")
         tables.append(MissingnessTable("by_port", path, ("PORT_ID",)))
         return tables
 
     by_port = summarize_missing(df, available, ("PORT_ID",))
-    by_port_path = QA_DIR / "port_turnaround_missingness_by_port.csv"
+    by_port_path = TABLES_DIR / "port_turnaround_missingness_by_port.csv"
     by_port.to_csv(by_port_path, index=False)
     tables.append(MissingnessTable("by_port", by_port_path, ("PORT_ID",)))
 
     if "TERMINAL_ID" in df.columns:
         by_port_terminal = summarize_missing(df, available, ("PORT_ID", "TERMINAL_ID"))
-        by_pt_path = QA_DIR / "port_turnaround_missingness_by_port_terminal.csv"
+        by_pt_path = TABLES_DIR / "port_turnaround_missingness_by_port_terminal.csv"
         by_port_terminal.to_csv(by_pt_path, index=False)
         tables.append(MissingnessTable("by_port_terminal", by_pt_path, ("PORT_ID", "TERMINAL_ID")))
 
@@ -210,7 +253,7 @@ def write_missingness_report(
     available: List[str],
 ) -> Path:
     """Highlight missingness hotspots above the configured threshold."""
-    path = QA_DIR / "port_turnaround_missingness_notes.txt"
+    path = REPORTS_DIR / "port_turnaround_missingness_notes.txt"
     lines = [
         "Missingness hotspots",
         f"Threshold: {MISSINGNESS_HOTSPOT_THRESHOLD:.0%} missing",
@@ -305,7 +348,7 @@ def write_missingness_chart(df: pd.DataFrame) -> Path:
 def write_group_counts(df: pd.DataFrame) -> Path:
     """Summarise coverage per (PORT_ID, TERMINAL_ID, IS_BALLAST)."""
     missing_cols = [col for col in GROUP_COLUMNS if col not in df.columns]
-    path = QA_DIR / "port_turnaround_group_counts.csv"
+    path = TABLES_DIR / "port_turnaround_group_counts.csv"
     if missing_cols:
         path.write_text(
             f"Required grouping columns missing: {', '.join(missing_cols)}",
@@ -329,6 +372,11 @@ def write_group_counts(df: pd.DataFrame) -> Path:
 
 
 def main() -> None:
+    args = parse_args()
+    if args.list_customers:
+        print(describe_customers())
+        return
+    paths = configure_customer(args.customer)
     df = load_training()
     if "DAYS_IN_PORT" in df:
         df["DAYS_IN_PORT"] = pd.to_numeric(df["DAYS_IN_PORT"], errors="coerce")
@@ -342,8 +390,8 @@ def main() -> None:
     hist_path = write_histogram(df)
     miss_chart_path = write_missingness_chart(df)
 
-    print("Generated artefacts:")
-    print(f"  - {(QA_DIR / 'port_turnaround_training_overview.txt').relative_to(ROOT)}")
+    print(f"Generated artefacts for [{paths.key}]:")
+    print(f"  - { (REPORTS_DIR / 'port_turnaround_training_overview.txt').relative_to(ROOT)}")
     print(f"  - {guardrail_path.relative_to(ROOT)}")
     for table in missingness_tables:
         print(f"  - {table.path.relative_to(ROOT)}")

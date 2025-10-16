@@ -1,6 +1,22 @@
+from __future__ import annotations
+
+import argparse
+import sys
 from pathlib import Path
-import pandas as pd
+
 import numpy as np
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+from utils.customer_paths import (
+    CustomerPaths,
+    describe_customers,
+    ensure_customer_dirs,
+    resolve_customer,
+)
 
 # --------------------------------------------------------------------------------------
 # Purpose
@@ -30,10 +46,35 @@ import numpy as np
 # - We trim blatant outliers so downstream stats/models aren’t dominated by junk.
 # --------------------------------------------------------------------------------------
 
-ROOT = Path(__file__).resolve().parents[1]
-RAW = ROOT / "DataSets" / "Raw" / "NorthernLightsTest"
-DER = ROOT / "DataSets" / "Derived"
-DER.mkdir(parents=True, exist_ok=True)
+_DEFAULT_PATHS = resolve_customer(None)
+RAW = _DEFAULT_PATHS.raw_dir
+DER = _DEFAULT_PATHS.derived_dir
+ensure_customer_dirs(_DEFAULT_PATHS)
+
+
+def configure_customer(slug: str | None) -> CustomerPaths:
+    """Repoint global directories to the selected customer."""
+    global RAW, DER
+    paths = resolve_customer(slug)
+    ensure_customer_dirs(paths)
+    RAW = paths.raw_dir
+    DER = paths.derived_dir
+    return paths
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Build port turnaround training dataset.")
+    parser.add_argument(
+        "--customer",
+        "-c",
+        help="Customer slug (e.g. 'northernlights', 'stena'). Defaults to northernlights.",
+    )
+    parser.add_argument(
+        "--list-customers",
+        action="store_true",
+        help="Print available customer identifiers and exit.",
+    )
+    return parser.parse_args()
 
 
 def load_csv(name: str) -> pd.DataFrame:
@@ -44,18 +85,26 @@ def load_csv(name: str) -> pd.DataFrame:
 
 
 def try_write_parquet(df: pd.DataFrame, path: Path) -> bool:
-    """Best-effort parquet export with a helpful message when pyarrow/fastparquet is missing."""
+    """Best-effort parquet export that degrades gracefully when engines are missing."""
     try:
         df.to_parquet(path, index=False)
         return True
-    except ImportError:
+    except (ImportError, ValueError) as exc:
         print(
             f"Skipping parquet output ({path.name}): install 'pyarrow' or 'fastparquet' to enable parquet exports."
         )
+        if isinstance(exc, ValueError):
+            print(f"  Reason: {exc}")
         return False
 
 
-def main():
+def main() -> None:
+    args = parse_args()
+    if args.list_customers:
+        print(describe_customers())
+        return
+    paths = configure_customer(args.customer)
+
     # ---- Load mandatory inputs ----
     pc = load_csv("port_calls_completed_asof_2025-12-31.csv")
     voy = load_csv("voyages_completed_asof_2025-12-31.csv")
@@ -222,10 +271,16 @@ def main():
         .reset_index(name="n_obs")
         .sort_values("n_obs", ascending=False)
     )
-    qa.to_csv(DER / "port_turnaround_training_counts.csv", index=False)
+    qa_path = DER / "port_turnaround_training_counts.csv"
+    qa.to_csv(qa_path, index=False)
 
-    print(f"Wrote {len(df):,} rows -> {out_csv.name}")
-    print(f"QA counts -> port_turnaround_training_counts.csv (check for very small groups)")
+    rel_out_csv = out_csv.relative_to(ROOT)
+    rel_qa = qa_path.relative_to(ROOT)
+    print(f"[{paths.key}] wrote {len(df):,} rows -> {rel_out_csv}")
+    if out_par.exists():
+        rel_out_par = out_par.relative_to(ROOT)
+        print(f"[{paths.key}] parquet -> {rel_out_par}")
+    print(f"[{paths.key}] QA counts -> {rel_qa} (check for very small groups)")
 
 
 if __name__ == "__main__":
