@@ -77,3 +77,14 @@
   - Moved legacy Northern Lights outputs into `DataSets/Derived/NorthernLights/` to mirror the Stena layout.
   - Updated customer path resolver + documentation so default runs point at the new directory while leaving Stena artefacts untouched.
   - Added `--list-customers` helper across build/lookup/QA scripts for quick discovery of available slugs; README/run guide now reference the multi-customer workflow.
+2025-10-16T11:05:00+02:00 - Port turnaround ML roadmap captured
+  - Documented modelling milestones (feature engineering, baselines, tuning, packaging) in `TextFiles/contextHelper.txt` to guide the next phase.
+  - Planned deliverables: model artefacts under `Models/Artifacts/<customer>/`, QA report in `DataSets/Derived/<customer>/QA/ml/`, helper API for optimiser integration.
+2025-10-16T11:12:00+02:00 - Port turnaround ML dataset prep (Stena)
+  - Added `Models/train_port_turnaround_model.py` to engineer features, merge voyage dates, and produce time-based train/validation splits.
+  - Generated Stena splits with 2025-01-01 cutoff (train=581, val=510) alongside metadata manifest in `DataSets/Derived/Stena/ML/`.
+  - Run guide updated with the new command; ready to iterate on baseline DecisionTree/GBM models in the next step.
+2025-10-16T11:25:00+02:00 - Port turnaround Decision Tree baseline (Stena)
+  - Implemented `Models/fit_port_turnaround_model.py` using sklearn pipelines (imputation + one-hot + DecisionTreeRegressor).
+  - Trained baseline (max_depth=8, min_samples_leaf=20); validation MAE 1.24 d vs baseline median MAE 1.31 d.
+  - Artefacts stored at `Models/Artifacts/stena/port_turnaround_dt.joblib`; metrics JSON and QA report saved to `Models/Artifacts/stena/` and `DataSets/Derived/Stena/QA/ml/` respectively.

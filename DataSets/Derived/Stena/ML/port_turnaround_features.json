@@ -1,0 +1,30 @@
+{
+  "customer": "stena",
+  "cutoff_date": "2025-01-01",
+  "target_column": "DAYS_IN_PORT",
+  "log_target_column": "LOG_DAYS_IN_PORT",
+  "categorical_features": [
+    "PORT_ID",
+    "TERMINAL_ID",
+    "IS_BALLAST",
+    "VESSEL_TYPE_ID",
+    "MONTH_NO",
+    "HAS_CANAL_PASSAGE",
+    "COMMODITY_GROUP_ID",
+    "COMMODITY_CODE",
+    "PORT_TERMINAL_KEY",
+    "PORT_IS_BALLAST_KEY"
+  ],
+  "numeric_features": [
+    "DWT_SUMMER",
+    "DRAFT_SUMMER",
+    "LOA",
+    "BEAM",
+    "DAYS_STOPPAGES",
+    "DAYS_EXTRA_IN_PORT"
+  ],
+  "derived_features": [],
+  "train_path": "DataSets/Derived/Stena/ML/port_turnaround_train.parquet",
+  "validation_path": "DataSets/Derived/Stena/ML/port_turnaround_validation.parquet",
+  "created_utc": "2025-10-16T09:59:50.303475"
+}

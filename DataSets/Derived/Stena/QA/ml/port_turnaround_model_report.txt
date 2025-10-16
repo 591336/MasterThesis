@@ -1,0 +1,15 @@
+Port turnaround ML model report (stena)
+
+Model metrics:
+  Train MAE: 1.092
+  Train RMSE: 1.477
+  Train sMAPE: 1.500
+
+  Validation MAE: 1.240
+  Validation RMSE: 1.671
+  Validation sMAPE: 2.258
+
+Baseline (training median) comparison:
+  Validation MAE: 1.314
+  Validation RMSE: 1.758
+  Validation sMAPE: 2.346

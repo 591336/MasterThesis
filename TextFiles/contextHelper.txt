@@ -77,11 +77,47 @@ Step 4. Ready for Optimizer
   - Falls back progressively.
  Integrate this function in the optimizer preprocessing step.
 
- Deliverables after completion
+Deliverables after completion
   - port_turnaround_training.csv (clean dataset for ML/QA).
   - port_turnaround_lookup.csv (ready for deterministic solver).
   - get_turnaround_time() function.
   - Validation plots and QA counts.
+
+---
+
+Port turnaround ML model - Milestones
+
+Step 1. Feature engineering dataset
+
+ - Build modelling view from `DataSets/Derived/<customer>/port_turnaround_training.csv`.
+ - Core categorical features: PORT_ID, TERMINAL_ID, IS_BALLAST, VESSEL_TYPE_ID, MONTH_NO, HAS_CANAL_PASSAGE, COMMODITY_GROUP_ID/COMMODITY_CODE.
+ - Numerical features: vessel dimensions (DWT_SUMMER, DRAFT_SUMMER, LOA, BEAM), DAYS_STOPPAGES, DAYS_EXTRA_IN_PORT.
+ - Derived signals: seasonal dummies, interactions (e.g., PORT × IS_BALLAST), log-transform of DAYS_IN_PORT for variance control (track inverse transform).
+ - Validation split: time-based (train ≤2024, validate 2025) plus optional grouped KFold (group by VOYAGE_ID or PORT_ID) if data volume allows.
+
+Step 2. Baseline & candidate models
+
+ - Baselines: lookup median (control), regularised linear models (Ridge/Lasso/ElasticNet), tree-based models (RandomForest, LightGBM/XGBoost).
+ - Implement sklearn pipelines with categorical encoders (OneHot or TargetEncoder) and numeric scaling; manage high-cardinality ports/terminals with smoothing.
+ - Optimisation metric: MAE (primary) with RMSE and SMAPE for reporting.
+
+Step 3. Hyperparameter tuning & diagnostics
+
+ - Use Optuna or HalvingGridSearchCV for efficient tuning; persist trial metadata.
+ - Produce feature importance / SHAP insights and residual diagnostics segmented by PORT_ID, IS_BALLAST, VESSEL_TYPE_ID.
+ - Persist best estimator + preprocessing artefacts under `Models/Artifacts/<customer>/port_turnaround_ml.joblib` (store metadata JSON).
+
+Step 4. Packaging & documentation
+
+ - Expose helper `predict_days_in_port(...)` wrapping preprocessing + model.
+ - Add CLI entry `uv run python Models/train_port_turnaround_model.py --customer <slug>` and document in run guide.
+ - Emit QA report to `DataSets/Derived/<customer>/QA/ml/port_turnaround_model_report.txt` summarising metrics vs lookup baseline.
+ - Record outcomes (metrics, chosen model) in progress log + context helper after training.
+
+Deliverables after completion
+  - Trained model artefact + preprocessing bundle (`Models/Artifacts/<customer>/port_turnaround_ml.joblib`).
+  - QA report with validation metrics/residual diagnostics.
+  - Helper API for downstream optimiser integration.
 
 ---
 
