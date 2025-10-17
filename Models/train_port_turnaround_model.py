@@ -47,6 +47,11 @@ NUMERIC_FEATURES: Tuple[str, ...] = (
     "DAYS_EXTRA_IN_PORT",
 )
 
+DERIVED_NUMERIC_FEATURES: Tuple[str, ...] = (
+    "PORT_MEDIAN_DAYS",
+    "PORT_IS_BALLAST_MEDIAN_DAYS",
+)
+
 ML_SUBDIR = "ML"
 VOYAGES_EXPORT_NAME = "voyages_completed_asof_2025-12-31.csv"
 TARGET_COLUMN = "DAYS_IN_PORT"
@@ -142,7 +147,11 @@ def enrich_features(df: pd.DataFrame, voyages: pd.DataFrame) -> pd.DataFrame:
     merged["TERMINAL_ID"] = terminal_filled.mask(terminal_filled == -1, pd.NA)
     merged["IS_BALLAST"] = ballast_flags
     merged["VESSEL_TYPE_ID"] = pd.to_numeric(merged["VESSEL_TYPE_ID"], errors="coerce").astype("Int64")
-    merged["MONTH_NO"] = pd.to_numeric(merged["MONTH_NO"], errors="coerce").astype("Int64")
+    month_no = pd.to_numeric(merged["MONTH_NO"], errors="coerce")
+    if "VOYAGE_START_DATE" in merged.columns:
+        month_from_date = merged["VOYAGE_START_DATE"].dt.month
+        month_no = month_no.fillna(month_from_date)
+    merged["MONTH_NO"] = month_no.astype("Int64")
     merged["HAS_CANAL_PASSAGE"] = (
         pd.to_numeric(merged.get("HAS_CANAL_PASSAGE"), errors="coerce").fillna(-1).astype(int)
     )
@@ -161,6 +170,23 @@ def enrich_features(df: pd.DataFrame, voyages: pd.DataFrame) -> pd.DataFrame:
     for col in NUMERIC_FEATURES:
         if col in merged.columns:
             merged[col] = pd.to_numeric(merged[col], errors="coerce")
+
+    # Aggregate features across full modelling view (acts as strong priors)
+    port_median = merged.groupby("PORT_ID")[TARGET_COLUMN].median()
+    merged["PORT_MEDIAN_DAYS"] = merged["PORT_ID"].map(port_median)
+
+    port_ballast_median = merged.groupby(["PORT_ID", "IS_BALLAST"])[TARGET_COLUMN].median().to_dict()
+    merged["PORT_IS_BALLAST_MEDIAN_DAYS"] = [
+        port_ballast_median.get((pid, ballast), np.nan)
+        for pid, ballast in zip(merged["PORT_ID"], merged["IS_BALLAST"])
+    ]
+    merged["PORT_IS_BALLAST_MEDIAN_DAYS"] = merged["PORT_IS_BALLAST_MEDIAN_DAYS"].fillna(
+        merged["PORT_MEDIAN_DAYS"]
+    )
+    merged["PORT_MEDIAN_DAYS"] = merged["PORT_MEDIAN_DAYS"].fillna(merged[TARGET_COLUMN].median())
+    merged["PORT_IS_BALLAST_MEDIAN_DAYS"] = merged["PORT_IS_BALLAST_MEDIAN_DAYS"].fillna(
+        merged[TARGET_COLUMN].median()
+    )
 
     merged[LOG_TARGET_COLUMN] = np.log1p(merged[TARGET_COLUMN])
     return merged
@@ -192,7 +218,12 @@ def export_splits(
     train_df.to_parquet(train_path, index=False)
     val_df.to_parquet(val_path, index=False)
 
-    base_feature_set = set(CATEGORICAL_FEATURES).union(DERIVED_CATEGORICAL_FEATURES).union(NUMERIC_FEATURES)
+    base_feature_set = (
+        set(CATEGORICAL_FEATURES)
+        .union(DERIVED_CATEGORICAL_FEATURES)
+        .union(NUMERIC_FEATURES)
+        .union(DERIVED_NUMERIC_FEATURES)
+    )
     derived_features = [
         col
         for col in columns
@@ -208,6 +239,7 @@ def export_splits(
         "categorical_features": list(CATEGORICAL_FEATURES),
         "derived_categorical_features": list(DERIVED_CATEGORICAL_FEATURES),
         "numeric_features": list(NUMERIC_FEATURES),
+        "derived_numeric_features": list(DERIVED_NUMERIC_FEATURES),
         "additional_features": derived_features,
         "train_path": str(train_path.relative_to(ROOT)),
         "validation_path": str(val_path.relative_to(ROOT)),
@@ -235,7 +267,12 @@ def main() -> None:
     voyage_dates = load_voyage_dates(paths)
     enriched = enrich_features(raw_training, voyage_dates)
 
-    selected_columns = list(CATEGORICAL_FEATURES + DERIVED_CATEGORICAL_FEATURES + NUMERIC_FEATURES) + [
+    selected_columns = list(
+        CATEGORICAL_FEATURES
+        + DERIVED_CATEGORICAL_FEATURES
+        + NUMERIC_FEATURES
+        + DERIVED_NUMERIC_FEATURES
+    ) + [
         TARGET_COLUMN,
         LOG_TARGET_COLUMN,
         "VOYAGE_ID",

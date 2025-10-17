@@ -31,9 +31,14 @@ Port turnaround ML prep
     - Notes: Default cutoff is 2025-01-01; voyages without start date are assigned to the training set. Use `--list-customers` to inspect available slugs.
 
 Port turnaround ML training
-  - Command: `uv run python Models/fit_port_turnaround_model.py [--customer stena] [--max-depth 8] [--min-samples-leaf 20] [--use-log-target]`
-    - Outputs: trained decision tree artefact under `Models/Artifacts/<customer>/`, metrics JSON, and QA report at `DataSets/Derived/<customer>/QA/ml/`.
-    - Notes: Default configurations suit baseline benchmarking; adjust tree parameters or extend script for additional estimators as needed.
+  - Command: `uv run python Models/fit_port_turnaround_model.py [--customer stena] [--model tree|hgbt] [--use-log-target] ...`
+    - Outputs: model artefact under `Models/Artifacts/<customer>/`, metrics JSON (`..._metrics.json`), and QA report at `DataSets/Derived/<customer>/QA/ml/`.
+    - Notes: Defaults mirror the decision-tree baseline; switch to `--model hgbt` for HistGradientBoosting with tunable `--learning-rate`, `--max-iter`, `--max-leaf-nodes`, etc.
+
+Port turnaround ML visualisations
+  - Command: `uv run python Models/plot_port_turnaround_model.py [--customer stena] [--split validation]`
+    - Outputs: actual vs predicted scatter + residual histogram PNGs under `DataSets/Derived/<customer>/QA/ml/`.
+    - Notes: Default split is validation; use `--split train` for training diagnostics.
 
 General tips
   - Prefer `uv run <cmd>` so dependency resolution stays consistent across OSes.

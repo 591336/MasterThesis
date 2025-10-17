@@ -11,7 +11,9 @@
     "MONTH_NO",
     "HAS_CANAL_PASSAGE",
     "COMMODITY_GROUP_ID",
-    "COMMODITY_CODE",
+    "COMMODITY_CODE"
+  ],
+  "derived_categorical_features": [
     "PORT_TERMINAL_KEY",
     "PORT_IS_BALLAST_KEY"
   ],
@@ -23,8 +25,12 @@
     "DAYS_STOPPAGES",
     "DAYS_EXTRA_IN_PORT"
   ],
-  "derived_features": [],
+  "derived_numeric_features": [
+    "PORT_MEDIAN_DAYS",
+    "PORT_IS_BALLAST_MEDIAN_DAYS"
+  ],
+  "additional_features": [],
   "train_path": "DataSets/Derived/Stena/ML/port_turnaround_train.parquet",
   "validation_path": "DataSets/Derived/Stena/ML/port_turnaround_validation.parquet",
-  "created_utc": "2025-10-16T09:59:50.303475"
+  "created_utc": "2025-10-16T12:03:26.290708+00:00"
 }

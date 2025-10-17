@@ -1,14 +1,14 @@
 {
   "metrics": {
     "train": {
-      "mae": 0.646920710750742,
-      "rmse": 1.1130294324287415,
-      "smape": 0.8241064185321267
+      "mae": 0.49223227962609933,
+      "rmse": 0.9843531862288978,
+      "smape": 0.45343709484570555
     },
     "validation": {
-      "mae": 0.7264376980823185,
-      "rmse": 1.068771209396576,
-      "smape": 1.4342307821240028
+      "mae": 0.8275128551731207,
+      "rmse": 1.1836099189715246,
+      "smape": 1.6403698824289221
     }
   },
   "baseline": {
@@ -24,13 +24,13 @@
     }
   },
   "parameters": {
-    "model": "tree",
-    "max_depth": 8,
-    "min_samples_leaf": 20,
+    "model": "hgbt",
+    "max_depth": -1,
+    "min_samples_leaf": 50,
     "random_state": 42,
-    "use_log_target": false,
-    "learning_rate": 0.05,
-    "max_leaf_nodes": 31,
-    "max_iter": 500
+    "use_log_target": true,
+    "learning_rate": 0.03,
+    "max_leaf_nodes": 63,
+    "max_iter": 600
   }
 }

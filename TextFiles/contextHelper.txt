@@ -119,6 +119,12 @@ Deliverables after completion
   - QA report with validation metrics/residual diagnostics.
   - Helper API for downstream optimiser integration.
 
+Status (2025-10-16)
+  - DecisionTreeRegressor baseline (max_depth=8, min_samples_leaf=20) with port-level median features achieves MAE ≈ 0.73 d on 2025 validation (lookup median baseline: 1.31 d).
+  - HistGradientBoostingRegressor prototype (lr=0.03, log-target) currently trails (MAE ≈ 0.83 d); kept for future tuning but not preferred for production yet.
+  - QA artefacts: `DataSets/Derived/<customer>/QA/ml/port_turnaround_model_report.txt` plus scatter/residual plots (validation and train splits).
+  - Serving plan: expose `predict_days_in_port(...)` that loads artefacts, applies the tree pipeline, falls back to lookup when inputs are sparse.
+
 ---
 
 Sailing Time Model - Milestones
@@ -133,6 +139,7 @@ Step 1. Dataset assembly
   - Compute effective hours per nautical mile: `hours_per_nm = (days_at_sea * 24) / (miles_ballast + miles_loaded)`.
   - Add derived features: `BALLAST_FRAC = miles_ballast / miles_total`, `MONTH_NO` (seasonality).
   - Save cleaned dataset as DataSets/Derived/sailing_time_training.(csv|parquet).
+  - Planned additional fields (draft 2025-10-16): voyage distance splits, canal cost flags, vessel age, cargo count per voyage for context. Splits to follow a 2025 validation cutoff mirroring port turnaround workflow.
 
 Step 2. Lookup model
 
@@ -162,6 +169,10 @@ Step 4. Ready for Optimizer
   - Falls back if group too small.
   - Returns `distance_nm * hours_per_nm`.
  Integrate into solver preprocessing to compute sailing times for candidate routes.
+
+Status (2025-10-16)
+  - Dataset requirements drafted; awaiting fresh raw exports (voyages, vessels, optional cargo) filtered to Stena window.
+  - Next actions: stage SQL extracts similar to port turnaround pipeline, implement `Models/build_sailing_time_dataset.py`, then replicate QA/lookup/ML stack.
 
  Deliverables after completion
   - sailing_time_training.csv (clean dataset for QA/ML).

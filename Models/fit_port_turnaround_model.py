@@ -10,11 +10,12 @@ import joblib
 import numpy as np
 import pandas as pd
 from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 from sklearn.pipeline import Pipeline
-from sklearn.tree import DecisionTreeRegressor
 from sklearn.preprocessing import OneHotEncoder
+from sklearn.tree import DecisionTreeRegressor
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -40,7 +41,7 @@ class ModelPaths:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train baseline Decision Tree model for port turnaround duration.")
+    parser = argparse.ArgumentParser(description="Train port turnaround ML model (Decision Tree or HistGradientBoosting).")
     parser.add_argument(
         "--customer",
         "-c",
@@ -51,7 +52,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Print available customer identifiers and exit.",
     )
-    parser.add_argument("--max-depth", type=int, default=8, help="Decision tree max depth.")
+    parser.add_argument(
+        "--model",
+        choices=("tree", "hgbt"),
+        default="tree",
+        help="Estimator type: 'tree' (DecisionTreeRegressor) or 'hgbt' (HistGradientBoostingRegressor).",
+    )
+    parser.add_argument("--max-depth", type=int, default=8, help="Model max depth (applies to both estimators).")
     parser.add_argument("--min-samples-leaf", type=int, default=20, help="Minimum samples per leaf.")
     parser.add_argument("--random-state", type=int, default=42, help="Random state for reproducibility.")
     parser.add_argument(
@@ -59,6 +66,9 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Train on log-transformed target (LOG_DAYS_IN_PORT) and invert predictions back to days.",
     )
+    parser.add_argument("--learning-rate", type=float, default=0.05, help="Learning rate for HistGradientBoosting.")
+    parser.add_argument("--max-leaf-nodes", type=int, default=31, help="Max leaf nodes for HistGradientBoosting.")
+    parser.add_argument("--max-iter", type=int, default=500, help="Number of boosting iterations for HistGradientBoosting.")
     return parser.parse_args()
 
 
@@ -89,16 +99,21 @@ def load_split(path: Path) -> pd.DataFrame:
 
 
 def build_pipeline(
+    model_type: str,
     categorical_features: list[str],
     numeric_features: list[str],
-    max_depth: int,
-    min_samples_leaf: int,
-    random_state: int,
+    args: argparse.Namespace,
 ) -> Pipeline:
+    encoder_kwargs = {"handle_unknown": "ignore", "sparse_output": False}
+    try:
+        OneHotEncoder(**encoder_kwargs)
+    except TypeError:
+        encoder_kwargs = {"handle_unknown": "ignore", "sparse": False}
+
     categorical_transformer = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="most_frequent")),
-            ("encoder", OneHotEncoder(handle_unknown="ignore")),
+            ("encoder", OneHotEncoder(**encoder_kwargs)),
         ]
     )
     numeric_transformer = Pipeline(
@@ -112,11 +127,22 @@ def build_pipeline(
             ("num", numeric_transformer, numeric_features),
         ]
     )
-    model = DecisionTreeRegressor(
-        max_depth=max_depth,
-        min_samples_leaf=min_samples_leaf,
-        random_state=random_state,
-    )
+    if model_type == "tree":
+        model = DecisionTreeRegressor(
+            max_depth=args.max_depth,
+            min_samples_leaf=args.min_samples_leaf,
+            random_state=args.random_state,
+        )
+    else:
+        max_depth = args.max_depth if args.max_depth is None or args.max_depth > 0 else None
+        model = HistGradientBoostingRegressor(
+            learning_rate=args.learning_rate,
+            max_depth=max_depth,
+            max_leaf_nodes=args.max_leaf_nodes,
+            max_iter=args.max_iter,
+            min_samples_leaf=args.min_samples_leaf,
+            random_state=args.random_state,
+        )
     pipeline = Pipeline(
         steps=[
             ("preprocess", preprocessor),
@@ -154,9 +180,10 @@ def format_report(customer: str, metrics: dict, baseline: dict) -> str:
     return "\n".join(lines)
 
 
-def determine_paths(paths: CustomerPaths) -> ModelPaths:
-    artifact = ARTIFACT_DIR / paths.key / "port_turnaround_dt.joblib"
-    metrics_json = ARTIFACT_DIR / paths.key / "port_turnaround_dt_metrics.json"
+def determine_paths(paths: CustomerPaths, model_type: str) -> ModelPaths:
+    suffix = "dt" if model_type == "tree" else "hgbt"
+    artifact = ARTIFACT_DIR / paths.key / f"port_turnaround_{suffix}.joblib"
+    metrics_json = ARTIFACT_DIR / paths.key / f"port_turnaround_{suffix}_metrics.json"
     report_txt = paths.derived_dir / "QA" / "ml" / "port_turnaround_model_report.txt"
     return ModelPaths(artifact=artifact, metrics_json=metrics_json, report_txt=report_txt)
 
@@ -176,7 +203,8 @@ def main() -> None:
     val_df = load_split(val_path)
 
     categorical_features = metadata["categorical_features"] + metadata.get("derived_categorical_features", [])
-    numeric_features = metadata["numeric_features"]
+    derived_numeric_features = metadata.get("derived_numeric_features", [])
+    numeric_features = metadata["numeric_features"] + derived_numeric_features
 
     feature_columns = categorical_features + numeric_features
     missing_features = [col for col in feature_columns + [TARGET_COLUMN] if col not in train_df.columns]
@@ -204,11 +232,10 @@ def main() -> None:
     y_val = val_df[target_col].to_numpy()
 
     pipeline = build_pipeline(
+        args.model,
         categorical_features,
         numeric_features,
-        max_depth=args.max_depth,
-        min_samples_leaf=args.min_samples_leaf,
-        random_state=args.random_state,
+        args,
     )
     pipeline.fit(X_train, y_train)
 
@@ -238,7 +265,7 @@ def main() -> None:
         "train": compute_metrics(train_eval_true, baseline_pred_train),
     }
 
-    model_paths = determine_paths(paths)
+    model_paths = determine_paths(paths, args.model)
     joblib.dump(
         {
             "pipeline": pipeline,
@@ -246,6 +273,7 @@ def main() -> None:
             "use_log_target": args.use_log_target,
             "feature_columns": feature_columns,
             "metadata": metadata,
+            "model_type": args.model,
         },
         model_paths.artifact,
     )
@@ -254,10 +282,14 @@ def main() -> None:
         "metrics": metrics,
         "baseline": baseline_metrics,
         "parameters": {
+            "model": args.model,
             "max_depth": args.max_depth,
             "min_samples_leaf": args.min_samples_leaf,
             "random_state": args.random_state,
             "use_log_target": args.use_log_target,
+            "learning_rate": args.learning_rate,
+            "max_leaf_nodes": args.max_leaf_nodes,
+            "max_iter": args.max_iter,
         },
     }
     model_paths.metrics_json.write_text(json.dumps(metrics_payload, indent=2), encoding="utf-8")
@@ -266,7 +298,8 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    print(f"[{paths.key}] Trained DecisionTreeRegressor")
+    label = "DecisionTreeRegressor" if args.model == "tree" else "HistGradientBoostingRegressor"
+    print(f"[{paths.key}] Trained {label}")
     print(f"  Artifact: {model_paths.artifact.relative_to(ROOT)}")
     print(f"  Metrics:  {model_paths.metrics_json.relative_to(ROOT)}")
     print(f"  Report:   {model_paths.report_txt.relative_to(ROOT)}")
