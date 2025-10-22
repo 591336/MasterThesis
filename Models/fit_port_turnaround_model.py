@@ -152,30 +152,67 @@ def build_pipeline(
     return pipeline
 
 
+def compute_smape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    epsilon = 1e-8
+    denom = np.abs(y_true) + np.abs(y_pred) + epsilon
+    smape = 2.0 * np.abs(y_true - y_pred) / denom
+    return float(np.mean(smape) * 100.0)
+
+
 def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     mae = mean_absolute_error(y_true, y_pred)
     rmse = mean_squared_error(y_true, y_pred) ** 0.5
-    mape = np.mean(np.abs((y_true - y_pred) / np.where(y_true == 0, 1.0, y_true)))
-    return {"mae": float(mae), "rmse": float(rmse), "smape": float(mape)}
+    smape = compute_smape(y_true, y_pred)
+    return {"mae": float(mae), "rmse": float(rmse), "smape": smape}
 
 
-def format_report(customer: str, metrics: dict, baseline: dict) -> str:
+def describe_split(metadata: dict) -> str:
+    strategy = metadata.get("split_strategy", {})
+    if not strategy:
+        return "Split: (unknown)"
+    if strategy.get("type") == "ratio":
+        val_ratio = strategy.get("validation_ratio")
+        n_train = strategy.get("n_train")
+        n_val = strategy.get("n_validation")
+        parts = [
+            "Split: chronological ratio",
+            f"  validation_ratio={val_ratio:.2f}" if isinstance(val_ratio, float) else "",
+            f"  n_train={n_train}",
+            f"  n_validation={n_val}",
+        ]
+        return "\n".join(p for p in parts if p)
+    if strategy.get("type") == "cutoff_date":
+        cutoff = strategy.get("cutoff")
+        n_train = strategy.get("n_train")
+        n_val = strategy.get("n_validation")
+        return (
+            "Split: cutoff date\n"
+            f"  cutoff={cutoff}\n"
+            f"  n_train={n_train}\n"
+            f"  n_validation={n_val}"
+        )
+    return f"Split: {strategy}"
+
+
+def format_report(customer: str, metrics: dict, baseline: dict, metadata: dict) -> str:
     lines = [
         f"Port turnaround ML model report ({customer})",
+        "",
+        describe_split(metadata),
         "",
         "Model metrics:",
         f"  Train MAE: {metrics['train']['mae']:.3f}",
         f"  Train RMSE: {metrics['train']['rmse']:.3f}",
-        f"  Train sMAPE: {metrics['train']['smape']:.3f}",
+        f"  Train sMAPE: {metrics['train']['smape']:.2f}%",
         "",
         f"  Validation MAE: {metrics['validation']['mae']:.3f}",
         f"  Validation RMSE: {metrics['validation']['rmse']:.3f}",
-        f"  Validation sMAPE: {metrics['validation']['smape']:.3f}",
+        f"  Validation sMAPE: {metrics['validation']['smape']:.2f}%",
         "",
         "Baseline (training median) comparison:",
         f"  Validation MAE: {baseline['validation']['mae']:.3f}",
         f"  Validation RMSE: {baseline['validation']['rmse']:.3f}",
-        f"  Validation sMAPE: {baseline['validation']['smape']:.3f}",
+        f"  Validation sMAPE: {baseline['validation']['smape']:.2f}%",
     ]
     return "\n".join(lines)
 
@@ -294,7 +331,7 @@ def main() -> None:
     }
     model_paths.metrics_json.write_text(json.dumps(metrics_payload, indent=2), encoding="utf-8")
     model_paths.report_txt.write_text(
-        format_report(paths.key, metrics, baseline_metrics),
+        format_report(paths.key, metrics, baseline_metrics, metadata),
         encoding="utf-8",
     )
 

@@ -26,9 +26,9 @@ QA artefacts for thesis figures
     - Outputs: combined lookup summary SVG at `DataSets/Derived/NorthernLights/QA/figures/port_turnaround_lookup_summary.svg` (or `DataSets/Derived/Stena/QA/figures/...` when `--customer stena` is supplied).
 
 Port turnaround ML prep
-  - Command: `uv run python Models/train_port_turnaround_model.py [--customer stena] [--cutoff-date YYYY-MM-DD]`
+  - Command: `uv run python Models/train_port_turnaround_model.py [--customer stena] [--cutoff-date YYYY-MM-DD | --validation-ratio 0.2]`
     - Outputs: parquet splits + metadata in `DataSets/Derived/<customer>/ML/` (train/validation feature sets, feature manifest).
-    - Notes: Default cutoff is 2025-01-01; voyages without start date are assigned to the training set. Use `--list-customers` to inspect available slugs.
+    - Notes: Default is a time cutoff of 2025-01-01. Provide `--validation-ratio` to split chronologically by fraction (sorted by voyage start date). Voyages without dates fall into the training set.
 
 Port turnaround ML training
   - Command: `uv run python Models/fit_port_turnaround_model.py [--customer stena] [--model tree|hgbt] [--use-log-target] ...`

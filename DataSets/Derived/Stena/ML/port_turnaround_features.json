@@ -1,6 +1,12 @@
 {
   "customer": "stena",
-  "cutoff_date": "2025-01-01",
+  "split_strategy": {
+    "type": "ratio",
+    "validation_ratio": 0.42,
+    "n_train": 633,
+    "n_validation": 458
+  },
+  "cutoff_date": "2025-01-28",
   "target_column": "DAYS_IN_PORT",
   "log_target_column": "LOG_DAYS_IN_PORT",
   "categorical_features": [
@@ -32,5 +38,5 @@
   "additional_features": [],
   "train_path": "DataSets/Derived/Stena/ML/port_turnaround_train.parquet",
   "validation_path": "DataSets/Derived/Stena/ML/port_turnaround_validation.parquet",
-  "created_utc": "2025-10-16T12:03:26.290708+00:00"
+  "created_utc": "2025-10-22T08:05:14.092125+00:00"
 }

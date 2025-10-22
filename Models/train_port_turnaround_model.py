@@ -83,6 +83,11 @@ def parse_args() -> argparse.Namespace:
         help="ISO date (YYYY-MM-DD) separating train (< cutoff) and validation (>= cutoff).",
     )
     parser.add_argument(
+        "--validation-ratio",
+        type=float,
+        help="Optional validation fraction (0 < r < 1). Uses chronological order and overrides --cutoff-date when provided.",
+    )
+    parser.add_argument(
         "--list-customers",
         action="store_true",
         help="Print available customer identifiers and exit.",
@@ -192,7 +197,7 @@ def enrich_features(df: pd.DataFrame, voyages: pd.DataFrame) -> pd.DataFrame:
     return merged
 
 
-def perform_split(
+def perform_time_split(
     df: pd.DataFrame, cutoff_date: str
 ) -> Tuple[pd.DataFrame, pd.DataFrame, datetime]:
     cutoff_ts = pd.to_datetime(cutoff_date).to_pydatetime()
@@ -203,12 +208,36 @@ def perform_split(
     return train_df, val_df, cutoff_ts
 
 
+def perform_ratio_split(
+    df: pd.DataFrame, validation_ratio: float
+) -> Tuple[pd.DataFrame, pd.DataFrame, datetime | None]:
+    if not 0 < validation_ratio < 1:
+        raise ValueError("validation_ratio must be between 0 and 1 (exclusive).")
+
+    df_sorted = df.sort_values("VOYAGE_START_DATE", na_position="first").reset_index(drop=True)
+    n_total = len(df_sorted)
+    if n_total < 2:
+        raise ValueError("Not enough rows to create a train/validation split.")
+
+    val_size = max(1, int(round(n_total * validation_ratio)))
+    val_size = min(n_total - 1, val_size)
+    split_idx = n_total - val_size
+
+    train_df = df_sorted.iloc[:split_idx].reset_index(drop=True)
+    val_df = df_sorted.iloc[split_idx:].reset_index(drop=True)
+
+    cutoff_series = val_df["VOYAGE_START_DATE"].dropna()
+    cutoff_ts = cutoff_series.iloc[0].to_pydatetime() if not cutoff_series.empty else None
+    return train_df, val_df, cutoff_ts
+
+
 def export_splits(
     paths: CustomerPaths,
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
-    cutoff: datetime,
+    cutoff: datetime | None,
     columns: List[str],
+    strategy: dict,
 ) -> PreparedSplits:
     ml_dir = paths.derived_dir / ML_SUBDIR
     train_path = ml_dir / "port_turnaround_train.parquet"
@@ -233,7 +262,8 @@ def export_splits(
 
     metadata = {
         "customer": paths.key,
-        "cutoff_date": cutoff.strftime("%Y-%m-%d"),
+        "split_strategy": strategy,
+        "cutoff_date": cutoff.strftime("%Y-%m-%d") if cutoff else None,
         "target_column": TARGET_COLUMN,
         "log_target_column": LOG_TARGET_COLUMN,
         "categorical_features": list(CATEGORICAL_FEATURES),
@@ -282,8 +312,26 @@ def main() -> None:
     if missing_cols:
         raise ValueError(f"Expected columns missing from enriched dataset: {', '.join(missing_cols)}")
 
-    train_df, val_df, cutoff_ts = perform_split(enriched[selected_columns], args.cutoff_date)
-    splits = export_splits(paths, train_df, val_df, cutoff_ts, selected_columns)
+    dataset = enriched[selected_columns]
+
+    if args.validation_ratio is not None:
+        train_df, val_df, cutoff_ts = perform_ratio_split(dataset, args.validation_ratio)
+        split_strategy = {
+            "type": "ratio",
+            "validation_ratio": args.validation_ratio,
+            "n_train": int(len(train_df)),
+            "n_validation": int(len(val_df)),
+        }
+    else:
+        train_df, val_df, cutoff_ts = perform_time_split(dataset, args.cutoff_date)
+        split_strategy = {
+            "type": "cutoff_date",
+            "cutoff": args.cutoff_date,
+            "n_train": int(len(train_df)),
+            "n_validation": int(len(val_df)),
+        }
+
+    splits = export_splits(paths, train_df, val_df, cutoff_ts, selected_columns, split_strategy)
 
     print(f"[{paths.key}] Prepared ML feature dataset")
     print(f"  Training rows:   {splits.train_size:,} -> {splits.train_path.relative_to(ROOT)}")

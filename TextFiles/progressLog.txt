@@ -99,6 +99,9 @@
   - Enhanced training script to support `--model hgbt` (sklearn HistGradientBoostingRegressor) with tunable learning rate/iterations and optional log-target training.
   - After regularisation (lr=0.03, max_iter=600, min_samples_leaf=50, log target), validation MAE settled at 0.83 d (slightly above the decision-tree baseline 0.73 d); train MAE 0.49 d indicates remaining overfit—further tuning or target encoding needed.
   - Artefacts saved to `Models/Artifacts/stena/port_turnaround_hgbt.joblib`; QA report overwritten for easy comparison.
+2025-10-16T12:12:00+02:00 - Flexible validation splits
+  - Added `--validation-ratio` option to `Models/train_port_turnaround_model.py` to support chronological fraction splits alongside the default 2025-01-01 cutoff.
+  - Metadata now records split strategy (ratio or cutoff) for reproducibility; run guide updated with new flag.
 2025-10-16T12:05:00+02:00 - Sailing time dataset planning
   - Outlined feature/field requirements for `build_sailing_time_dataset.py` (voyage durations, distance splits, vessel attributes, seasonal markers).
   - Mirroring port turnaround workflow: plan to extract Stena-specific voyages, join vessel metadata, compute `hours_per_nm`, and stage 2025 validation split.
