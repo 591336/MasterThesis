@@ -106,3 +106,9 @@
   - Outlined feature/field requirements for `build_sailing_time_dataset.py` (voyage durations, distance splits, vessel attributes, seasonal markers).
   - Mirroring port turnaround workflow: plan to extract Stena-specific voyages, join vessel metadata, compute `hours_per_nm`, and stage 2025 validation split.
   - Awaiting raw SQL exports before implementing dataset build + QA + lookup/ML scripts for the sailing time model.
+2025-10-16T12:18:00+02:00 - Sailing time dataset build (Stena)
+  - Implemented `Models/build_sailing_time_dataset.py`; loads voyages/vessels/cargo counts, filters test vessels, computes hours-per-nm and ballast fraction, applies guardrails [0.02, 5.0] hours/nm.
+  - Generated Stena dataset (`DataSets/Derived/Stena/sailing_time/sailing_time_training.csv`, n≈1.2k) plus QA counts and log file. SQL templates captured under `DataSets/Raw/Stena/SQL/`.
+2025-10-16T12:26:00+02:00 - Sailing time QA + lookup
+  - Added `QA/sailing_time_dataset_qa.py` to produce overview, guardrail, missingness, and group coverage artefacts under `DataSets/Derived/<customer>/sailing_time/QA/`.
+  - Implemented `Models/sailing_time_lookup.py` (hierarchy: vessel type → canal flag → month → global) with support thresholds; lookup saved to `DataSets/Derived/<customer>/sailing_time/sailing_time_lookup.(csv|parquet)` plus QA bins.

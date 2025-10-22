@@ -1,0 +1,43 @@
+Sailing time training dataset - overview
+Rows: 1,239
+
+Column dtypes:
+  VOYAGE_ID: int64
+  VESSEL_ID: int64
+  VESSEL_TYPE_ID: int64
+  VOYAGE_START_TS: object
+  MILES_BALLAST: float64
+  MILES_LOADED: float64
+  MILES_TOTAL: float64
+  DAYS_AT_SEA: float64
+  DAYS_IN_PORT_TOTAL: int64
+  DAYS_TOTAL: float64
+  HAS_CANAL_PASSAGE: int64
+  CANAL_COST: int64
+  CANAL_1_ID: float64
+  CANAL_2_ID: float64
+  VOYAGE_STATUS: object
+  VOYAGE_START_DATE: object
+  VESSEL_NAME: object
+  DWT_SUMMER: float64
+  DRAFT_SUMMER: float64
+  LOA: float64
+  BEAM: float64
+  BUILT_YEAR: float64
+  FLAG_ID: float64
+  N_CARGO_ROWS: float64
+  N_UNIQUE_CARGO: float64
+  TOTAL_CARGO_QUANTITY: float64
+  HOURS_PER_NM: float64
+  BALLAST_FRAC: float64
+  MONTH_NO: int64
+  YEAR: int64
+  VOYAGE_YEAR_MONTH: object
+  VESSEL_AGE_YEARS: float64
+
+Null ratios (selected columns):
+  VESSEL_TYPE_ID: 0.00%
+  HAS_CANAL_PASSAGE: 0.00%
+  MONTH_NO: 0.00%
+  BALLAST_FRAC: 0.00%
+  DWT_SUMMER: 0.08%

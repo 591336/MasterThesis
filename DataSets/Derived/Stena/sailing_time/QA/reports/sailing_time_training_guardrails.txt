@@ -1,0 +1,15 @@
+HOURS_PER_NM guardrail check
+Observations (non-null): 1,239
+
+Key percentiles (hours per NM):
+  min:  0.0218
+  p05:  0.0746
+  p25:  0.0756
+  median: 0.0808
+  p75:  0.0840
+  p95:  0.1638
+  max:  4.0529
+
+Guardrail: 0.02 <= HOURS_PER_NM <= 5.0
+  Below lower bound: 0
+  Above upper bound: 0

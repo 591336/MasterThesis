@@ -12,6 +12,19 @@ Port turnaround dataset pipeline
     - Outputs: `DataSets/Derived/NorthernLights/port_turnaround_training.csv` by default, or `DataSets/Derived/Stena/port_turnaround_training.csv` when `--customer stena` is supplied. Parquet is written when an engine is installed.
     - Notes: Script emits QA counts at the end and warns if parquet export is skipped (install `pyarrow` or `fastparquet`). Omit `--customer` to default to Northern Lights.
 
+Sailing time dataset pipeline
+  - Command: `uv run python Models/build_sailing_time_dataset.py [--customer stena]`
+    - Outputs: `DataSets/Derived/<customer>/sailing_time/sailing_time_training.csv` (+parquet when available) and `.../sailing_time_training_counts.csv`.
+    - Notes: Requires staged raw extracts (`sailing_time_voyages...`, `sailing_time_vessels_reference.csv`, optional cargo counts). Rows with vessel names containing "test" are removed automatically.
+
+Sailing time QA
+  - Command: `uv run python QA/sailing_time_dataset_qa.py [--customer stena]`
+    - Outputs: `DataSets/Derived/<customer>/sailing_time/QA/` (reports, tables, figures mirroring the turnaround QA structure).
+
+Sailing time lookup generation
+  - Command: `uv run python Models/sailing_time_lookup.py [--customer stena]`
+    - Outputs: `DataSets/Derived/<customer>/sailing_time/sailing_time_lookup.(csv|parquet)` plus `.../sailing_time_lookup_qa_bins.csv`.
+
 Port turnaround lookup generation
   - Prerequisite: Latest `port_turnaround_training.csv` from the step above.
   - Command: `uv run python Models/port_turnaround_lookup.py [--customer stena]`

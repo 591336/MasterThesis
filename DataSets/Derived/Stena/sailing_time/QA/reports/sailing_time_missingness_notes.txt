@@ -1,0 +1,24 @@
+Missingness hotspots
+Threshold: 50% missing
+
+Column: VESSEL_TYPE_ID (sailing_time_missingness_by_vessel_type.csv)
+  - No groups exceed threshold
+Column: HAS_CANAL_PASSAGE (sailing_time_missingness_by_vessel_type.csv)
+  - No groups exceed threshold
+Column: MONTH_NO (sailing_time_missingness_by_vessel_type.csv)
+  - No groups exceed threshold
+Column: BALLAST_FRAC (sailing_time_missingness_by_vessel_type.csv)
+  - No groups exceed threshold
+Column: DWT_SUMMER (sailing_time_missingness_by_vessel_type.csv)
+  - No groups exceed threshold
+Column: VESSEL_TYPE_ID (sailing_time_missingness_by_type_canal.csv)
+  - No groups exceed threshold
+Column: HAS_CANAL_PASSAGE (sailing_time_missingness_by_type_canal.csv)
+  - No groups exceed threshold
+Column: MONTH_NO (sailing_time_missingness_by_type_canal.csv)
+  - No groups exceed threshold
+Column: BALLAST_FRAC (sailing_time_missingness_by_type_canal.csv)
+  - No groups exceed threshold
+Column: DWT_SUMMER (sailing_time_missingness_by_type_canal.csv)
+  - No groups exceed threshold
+No hotspots above threshold detected.

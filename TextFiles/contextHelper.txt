@@ -134,12 +134,12 @@ Step 1. Dataset assembly
  Exported voyages_completed_asof_2025-12-31.csv already available.
 
  Write Models/build_sailing_time_dataset.py to:
-  - Select relevant voyage fields: VOYAGE_ID, VESSEL_ID, VESSEL_TYPE_ID, MILES_BALLAST, MILES_LOADED, DAYS_TOTAL_AT_SEA, HAS_CANAL_PASSAGE, ESTIMATED_VOYAGE_START_DATE.
-  - Join with vessels_reference.csv for size features (DWT, DRAFT, LOA, BEAM).
-  - Compute effective hours per nautical mile: `hours_per_nm = (days_at_sea * 24) / (miles_ballast + miles_loaded)`.
-  - Add derived features: `BALLAST_FRAC = miles_ballast / miles_total`, `MONTH_NO` (seasonality).
-  - Save cleaned dataset as DataSets/Derived/sailing_time_training.(csv|parquet).
-  - Planned additional fields (draft 2025-10-16): voyage distance splits, canal cost flags, vessel age, cargo count per voyage for context. Splits to follow a 2025 validation cutoff mirroring port turnaround workflow.
+  - Select relevant voyage fields: VOYAGE_ID, VESSEL_ID, VESSEL_TYPE_ID, MILES_BALLAST, MILES_LOADED, MILES_TOTAL, DAYS_TOTAL_AT_SEA, HAS_CANAL_PASSAGE, ESTIMATED_VOYAGE_START_DATE.
+  - Join with vessels_reference.csv for size features (DWT, DRAFT, LOA, BEAM) and optional cargo counts per voyage.
+  - Compute effective hours per nautical mile: `HOURS_PER_NM = (DAYS_AT_SEA * 24) / MILES_TOTAL`.
+  - Engineer features: `BALLAST_FRAC = miles_ballast / miles_total`, `MONTH_NO`, voyage year, vessel age, optional voyage-level cargo metrics.
+  - Save cleaned dataset as `DataSets/Derived/<customer>/sailing_time/sailing_time_training.(csv|parquet)`.
+  - Guardrails: retain rows with HOURS_PER_NM in [0.02, 5.0]; drop vessels with names containing "test".
 
 Step 2. Lookup model
 
@@ -152,7 +152,7 @@ Step 2. Lookup model
   Global.
 
  Apply min support (>=3 obs).
- Clamp results to [0.5, 10] hours/nm (sane bounds).
+ Clamp results to [0.02, 5] hours/nm (sane bounds).
  Save to DataSets/Derived/sailing_time_lookup.(csv|parquet).
 
 Step 3. Validation
@@ -171,8 +171,10 @@ Step 4. Ready for Optimizer
  Integrate into solver preprocessing to compute sailing times for candidate routes.
 
 Status (2025-10-16)
-  - Dataset requirements drafted; awaiting fresh raw exports (voyages, vessels, optional cargo) filtered to Stena window.
-  - Next actions: stage SQL extracts similar to port turnaround pipeline, implement `Models/build_sailing_time_dataset.py`, then replicate QA/lookup/ML stack.
+  - Stena dataset built (`DataSets/Derived/Stena/sailing_time/sailing_time_training.csv`, n ≈ 1.2k) with QA counts under `/QA/`.
+  - QA automation (`QA/sailing_time_dataset_qa.py`) and lookup generation (`Models/sailing_time_lookup.py`) complete; lookup stored at `DataSets/Derived/<customer>/sailing_time/sailing_time_lookup.(csv|parquet)` with QA bins.
+  - Research-informed roadmap: start with tabular boosting (LightGBM/XGBoost) on current features, report MAE/sMAPE + residual percentiles; plan metocean enrichment (ERA5, WW3, CMEMS/OSCAR) for Phase 2, and consider grey-box residuals for physics robustness.
+  - Splitting strategy will mirror port turnaround (time cutoff or `--validation-ratio`), with grouped/rolling splits for robustness documented in thesis.
 
  Deliverables after completion
   - sailing_time_training.csv (clean dataset for QA/ML).

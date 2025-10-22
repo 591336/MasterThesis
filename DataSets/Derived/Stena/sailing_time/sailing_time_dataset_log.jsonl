@@ -1,0 +1,4 @@
+{'customer': 'stena', 'timestamp_utc': '2025-10-22T08:40:33.865451+00:00', 'n_rows': 22, 'hours_per_nm_min': 1.7428670864448088, 'hours_per_nm_p50': 1.7428670864448088, 'hours_per_nm_max': 6.964290152650315, 'fraction_missing_hours': 0.0}
+{'customer': 'stena', 'timestamp_utc': '2025-10-22T08:45:38.013824+00:00', 'n_rows': 22, 'hours_per_nm_min': 1.7428670864448088, 'hours_per_nm_p50': 1.7428670864448088, 'hours_per_nm_max': 6.964290152650315, 'fraction_missing_hours': 0.0}
+{'customer': 'stena', 'timestamp_utc': '2025-10-22T08:47:48.664135+00:00', 'n_rows': 1239, 'hours_per_nm_min': 0.021765775834583365, 'hours_per_nm_p50': 0.08076923076923076, 'hours_per_nm_max': 4.052867794019509, 'fraction_missing_hours': 0.0}
+{'customer': 'stena', 'timestamp_utc': '2025-10-22T08:50:27.325824+00:00', 'n_rows': 1239, 'hours_per_nm_min': 0.021765775834583365, 'hours_per_nm_p50': 0.08076923076923076, 'hours_per_nm_max': 4.052867794019509, 'fraction_missing_hours': 0.0}
