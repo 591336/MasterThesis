@@ -1,0 +1,37 @@
+{
+  "metrics": {
+    "train": {
+      "mae": 0.018558892879057657,
+      "rmse": 0.10495992696812223,
+      "smape": 8.048129645329556
+    },
+    "validation": {
+      "mae": 0.10169665175468917,
+      "rmse": 0.3138596225238122,
+      "smape": 37.4296037670937
+    }
+  },
+  "baseline": {
+    "validation": {
+      "mae": 0.08609425856985388,
+      "rmse": 0.35651809365504095,
+      "smape": 28.672896087468736
+    },
+    "train": {
+      "mae": 0.015448942615609994,
+      "rmse": 0.11849277272876114,
+      "smape": 7.777266744131942
+    }
+  },
+  "parameters": {
+    "model": "tree",
+    "max_depth": 8,
+    "min_samples_leaf": 20,
+    "random_state": 42,
+    "use_log_target": false,
+    "learning_rate": 0.05,
+    "max_leaf_nodes": 31,
+    "max_iter": 500,
+    "label_suffix": null
+  }
+}

@@ -1,0 +1,20 @@
+Sailing-time ML model report (noseason) (stena)
+
+Split: chronological ratio
+  validation_ratio=0.30
+  n_train=867
+  n_validation=372
+
+Model metrics:
+  Train MAE: 0.0186
+  Train RMSE: 0.1050
+  Train sMAPE: 8.05%
+
+  Validation MAE: 0.1017
+  Validation RMSE: 0.3139
+  Validation sMAPE: 37.43%
+
+Baseline (training median) comparison:
+  Validation MAE: 0.0861
+  Validation RMSE: 0.3565
+  Validation sMAPE: 28.67%

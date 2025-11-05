@@ -1,0 +1,346 @@
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import joblib
+import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import HistGradientBoostingRegressor
+from sklearn.impute import SimpleImputer
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.tree import DecisionTreeRegressor
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.append(str(ROOT))
+
+from utils.customer_paths import (  # noqa: E402
+    CustomerPaths,
+    describe_customers,
+    ensure_customer_dirs,
+    resolve_customer,
+)
+
+ML_SUBDIR = "ML"
+QA_SUBDIR = Path("QA") / "ml"
+ARTIFACT_DIR = ROOT / "Models" / "Artifacts"
+TARGET_COLUMN = "HOURS_PER_NM"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Train sailing-time ML model (Decision Tree or HistGradientBoosting)."
+    )
+    parser.add_argument(
+        "--customer",
+        "-c",
+        help="Customer slug (default: northernlights). Use --list-customers to see options.",
+    )
+    parser.add_argument(
+        "--list-customers",
+        action="store_true",
+        help="Print available customer identifiers and exit.",
+    )
+    parser.add_argument(
+        "--model",
+        choices=("tree", "hgbt"),
+        default="tree",
+        help="Estimator type: 'tree' (DecisionTreeRegressor) or 'hgbt' (HistGradientBoostingRegressor).",
+    )
+    parser.add_argument("--max-depth", type=int, default=8, help="Model max depth (applies to both estimators).")
+    parser.add_argument("--min-samples-leaf", type=int, default=20, help="Minimum samples per leaf.")
+    parser.add_argument("--random-state", type=int, default=42, help="Random state for reproducibility.")
+    parser.add_argument(
+        "--use-log-target",
+        action="store_true",
+        help="Train on log-transformed target (LOG_HOURS_PER_NM) and invert predictions back to hours per NM.",
+    )
+    parser.add_argument("--learning-rate", type=float, default=0.05, help="Learning rate for HistGradientBoosting.")
+    parser.add_argument("--max-leaf-nodes", type=int, default=31, help="Max leaf nodes for HistGradientBoosting.")
+    parser.add_argument("--max-iter", type=int, default=500, help="Number of boosting iterations for HistGradientBoosting.")
+    parser.add_argument(
+        "--label-suffix",
+        help="Optional suffix added to artifact/report filenames (e.g., 'noseason') for ablations.",
+    )
+    return parser.parse_args()
+
+
+def configure_customer(slug: str | None) -> CustomerPaths:
+    paths = resolve_customer(slug)
+    ensure_customer_dirs(paths)
+    (paths.derived_dir / ML_SUBDIR).mkdir(parents=True, exist_ok=True)
+    (paths.derived_dir / QA_SUBDIR).mkdir(parents=True, exist_ok=True)
+    (ARTIFACT_DIR / paths.key).mkdir(parents=True, exist_ok=True)
+    return paths
+
+
+def load_metadata(paths: CustomerPaths) -> dict:
+    meta_path = paths.derived_dir / ML_SUBDIR / "sailing_time_features.json"
+    if not meta_path.exists():
+        raise FileNotFoundError(
+            f"Feature metadata missing for '{paths.key}'. Run Models/train_sailing_time_model.py first."
+        )
+    return json.loads(meta_path.read_text())
+
+
+def load_split(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        raise FileNotFoundError(f"Expected split file missing: {path}")
+    return pd.read_parquet(path)
+
+
+def build_pipeline(
+    model_type: str,
+    categorical_features: list[str],
+    numeric_features: list[str],
+    args: argparse.Namespace,
+) -> Pipeline:
+    encoder_kwargs = {"handle_unknown": "ignore", "sparse_output": False}
+    try:
+        OneHotEncoder(**encoder_kwargs)
+    except TypeError:
+        encoder_kwargs = {"handle_unknown": "ignore", "sparse": False}
+
+    categorical_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="most_frequent")),
+            ("encoder", OneHotEncoder(**encoder_kwargs)),
+        ]
+    )
+    numeric_transformer = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+        ]
+    )
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("cat", categorical_transformer, categorical_features),
+            ("num", numeric_transformer, numeric_features),
+        ]
+    )
+
+    if model_type == "tree":
+        model = DecisionTreeRegressor(
+            max_depth=args.max_depth,
+            min_samples_leaf=args.min_samples_leaf,
+            random_state=args.random_state,
+        )
+    else:
+        max_depth = args.max_depth if args.max_depth is None or args.max_depth > 0 else None
+        model = HistGradientBoostingRegressor(
+            learning_rate=args.learning_rate,
+            max_depth=max_depth,
+            max_leaf_nodes=args.max_leaf_nodes,
+            max_iter=args.max_iter,
+            min_samples_leaf=args.min_samples_leaf,
+            random_state=args.random_state,
+        )
+
+    return Pipeline(
+        steps=[
+            ("preprocess", preprocessor),
+            ("model", model),
+        ]
+    )
+
+
+def compute_smape(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+    epsilon = 1e-8
+    denom = np.abs(y_true) + np.abs(y_pred) + epsilon
+    smape = 2.0 * np.abs(y_true - y_pred) / denom
+    return float(np.mean(smape) * 100.0)
+
+
+def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
+    mae = mean_absolute_error(y_true, y_pred)
+    rmse = mean_squared_error(y_true, y_pred) ** 0.5
+    smape = compute_smape(y_true, y_pred)
+    return {"mae": float(mae), "rmse": float(rmse), "smape": smape}
+
+
+def describe_split(metadata: dict) -> str:
+    strategy = metadata.get("split_strategy", {})
+    if not strategy:
+        return "Split: (unknown)"
+    if strategy.get("type") == "ratio":
+        val_ratio = strategy.get("validation_ratio")
+        n_train = strategy.get("n_train")
+        n_val = strategy.get("n_validation")
+        parts = [
+            "Split: chronological ratio",
+            f"  validation_ratio={val_ratio:.2f}" if isinstance(val_ratio, float) else "",
+            f"  n_train={n_train}",
+            f"  n_validation={n_val}",
+        ]
+        return "\n".join(p for p in parts if p)
+    if strategy.get("type") == "cutoff_date":
+        cutoff = strategy.get("cutoff")
+        n_train = strategy.get("n_train")
+        n_val = strategy.get("n_validation")
+        return (
+            "Split: cutoff date\n"
+            f"  cutoff={cutoff}\n"
+            f"  n_train={n_train}\n"
+            f"  n_validation={n_val}"
+        )
+    return f"Split: {strategy}"
+
+
+def format_report(customer: str, metrics: dict, baseline: dict, metadata: dict, label: str | None) -> str:
+    run_label = f" ({label})" if label else ""
+    lines = [
+        f"Sailing-time ML model report{run_label} ({customer})",
+        "",
+        describe_split(metadata),
+        "",
+        "Model metrics:",
+        f"  Train MAE: {metrics['train']['mae']:.4f}",
+        f"  Train RMSE: {metrics['train']['rmse']:.4f}",
+        f"  Train sMAPE: {metrics['train']['smape']:.2f}%",
+        "",
+        f"  Validation MAE: {metrics['validation']['mae']:.4f}",
+        f"  Validation RMSE: {metrics['validation']['rmse']:.4f}",
+        f"  Validation sMAPE: {metrics['validation']['smape']:.2f}%",
+        "",
+        "Baseline (training median) comparison:",
+        f"  Validation MAE: {baseline['validation']['mae']:.4f}",
+        f"  Validation RMSE: {baseline['validation']['rmse']:.4f}",
+        f"  Validation sMAPE: {baseline['validation']['smape']:.2f}%",
+    ]
+    return "\n".join(lines)
+
+
+def determine_paths(paths: CustomerPaths, model_type: str, label: str | None) -> tuple[Path, Path, Path]:
+    suffix = "dt" if model_type == "tree" else "hgbt"
+    if label:
+        suffix = f"{suffix}_{label}"
+    artifacts_dir = ARTIFACT_DIR / paths.key
+    artifact = artifacts_dir / f"sailing_time_{suffix}.joblib"
+    metrics_json = artifacts_dir / f"sailing_time_{suffix}_metrics.json"
+    report_name = f"sailing_time_model_report_{suffix}.txt"
+    report_txt = paths.derived_dir / QA_SUBDIR / report_name
+    return artifact, metrics_json, report_txt
+
+
+def main() -> None:
+    args = parse_args()
+    if args.list_customers:
+        print(describe_customers())
+        return
+
+    paths = configure_customer(args.customer)
+    metadata = load_metadata(paths)
+
+    train_path = ROOT / metadata["train_path"]
+    val_path = ROOT / metadata["validation_path"]
+    train_df = load_split(train_path)
+    val_df = load_split(val_path)
+
+    categorical_features = metadata.get("categorical_features", []) + metadata.get("derived_categorical_features", [])
+    numeric_features = metadata.get("numeric_features", [])
+
+    feature_columns = categorical_features + numeric_features
+    missing_columns = [col for col in feature_columns + [TARGET_COLUMN] if col not in train_df.columns]
+    if missing_columns:
+        raise ValueError(f"Training dataset missing expected columns: {', '.join(missing_columns)}")
+
+    target_col = metadata.get("log_target_column") if args.use_log_target else TARGET_COLUMN
+    if target_col not in train_df.columns:
+        raise ValueError(f"Target column '{target_col}' missing from training data.")
+
+    X_train = train_df[feature_columns].copy()
+    X_val = val_df[feature_columns].copy()
+
+    for col in categorical_features:
+        if col in X_train.columns:
+            X_train[col] = X_train[col].astype("string").fillna("MISSING")
+            X_val[col] = X_val[col].astype("string").fillna("MISSING")
+
+    for col in numeric_features:
+        if col in X_train.columns:
+            X_train[col] = pd.to_numeric(X_train[col], errors="coerce")
+            X_val[col] = pd.to_numeric(X_val[col], errors="coerce")
+
+    y_train = train_df[target_col].to_numpy()
+    y_val = val_df[target_col].to_numpy()
+
+    pipeline = build_pipeline(args.model, categorical_features, numeric_features, args)
+    pipeline.fit(X_train, y_train)
+
+    train_pred = pipeline.predict(X_train)
+    val_pred = pipeline.predict(X_val)
+
+    if args.use_log_target:
+        train_eval_true = np.expm1(y_train)
+        train_eval_pred = np.expm1(train_pred)
+        val_eval_true = np.expm1(y_val)
+        val_eval_pred = np.expm1(val_pred)
+    else:
+        train_eval_true = y_train
+        train_eval_pred = train_pred
+        val_eval_true = y_val
+        val_eval_pred = val_pred
+
+    metrics = {
+        "train": compute_metrics(train_eval_true, train_eval_pred),
+        "validation": compute_metrics(val_eval_true, val_eval_pred),
+    }
+
+    baseline_pred_train = np.full_like(train_eval_true, np.median(train_eval_true), dtype=float)
+    baseline_pred_val = np.full_like(val_eval_true, np.median(train_eval_true), dtype=float)
+    baseline_metrics = {
+        "validation": compute_metrics(val_eval_true, baseline_pred_val),
+        "train": compute_metrics(train_eval_true, baseline_pred_train),
+    }
+
+    artifact_path, metrics_path, report_path = determine_paths(paths, args.model, args.label_suffix)
+    joblib.dump(
+        {
+            "pipeline": pipeline,
+            "target_column": TARGET_COLUMN,
+            "use_log_target": args.use_log_target,
+            "feature_columns": feature_columns,
+            "metadata": metadata,
+            "model_type": args.model,
+            "label_suffix": args.label_suffix,
+        },
+        artifact_path,
+    )
+
+    metrics_payload = {
+        "metrics": metrics,
+        "baseline": baseline_metrics,
+        "parameters": {
+            "model": args.model,
+            "max_depth": args.max_depth,
+            "min_samples_leaf": args.min_samples_leaf,
+            "random_state": args.random_state,
+            "use_log_target": args.use_log_target,
+            "learning_rate": args.learning_rate,
+            "max_leaf_nodes": args.max_leaf_nodes,
+            "max_iter": args.max_iter,
+            "label_suffix": args.label_suffix,
+        },
+    }
+    metrics_path.write_text(json.dumps(metrics_payload, indent=2), encoding="utf-8")
+    report_path.write_text(
+        format_report(paths.key, metrics, baseline_metrics, metadata, args.label_suffix),
+        encoding="utf-8",
+    )
+
+    label = "DecisionTreeRegressor" if args.model == "tree" else "HistGradientBoostingRegressor"
+    suffix_msg = f" ({args.label_suffix})" if args.label_suffix else ""
+    print(f"[{paths.key}] Trained {label}{suffix_msg}")
+    print(f"  Artifact: {artifact_path.relative_to(ROOT)}")
+    print(f"  Metrics:  {metrics_path.relative_to(ROOT)}")
+    print(f"  Report:   {report_path.relative_to(ROOT)}")
+
+
+if __name__ == "__main__":
+    main()

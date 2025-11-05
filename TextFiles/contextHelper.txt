@@ -17,6 +17,19 @@ Environment notes:
   - README.md and TextFiles/runGuide.txt (2025-10-05) document uv-based setup for macOS/Linux and Windows (winget install, interpreter paths, PowerShell execution policy guidance).
   - All dataset/QA scripts accept `--customer northernlights|stena` (default Northern Lights) to switch raw/derived folders.
 
+Port turnaround ML experiments (Stena – 2025-10-17)
+ - DecisionTreeRegressor (`uv run python Models/fit_port_turnaround_model.py --customer stena --model tree --max-depth 8 --min-samples-leaf 20`):
+   • Train: MAE 0.63 d, RMSE 1.08 d, sMAPE 38.7 %.
+   • Validation (chronological ratio 58/42 → 633 train, 458 val): MAE 0.70 d, RMSE 1.07 d, sMAPE 52.6 %.
+   • Selected as current production model – best validation MAE, stable residuals, interpretable splits.
+ - HistGradientBoostingRegressor (`--model hgbt --use-log-target --learning-rate 0.03 --max-leaf-nodes 63 --max-iter 600 --min-samples-leaf 50`):
+   • Train: MAE 0.49 d, RMSE 0.98 d (log-target fit).
+   • Validation: MAE 0.83 d, RMSE 1.18 d – worse than tree despite lower training error; validation sMAPE currently unreliable (bug when using log target).
+   • Rejected for deployment; capturing notes for thesis comparison and to motivate focus on simpler tree.
+ - Baseline (training median turnaround):
+   • Validation MAE 1.30 d, RMSE 1.69 d, sMAPE 91.7 %.
+   • Provides benchmark improvement (~0.6 d MAE gain) to cite in thesis.
+
  QA and exploration plan for `port_turnaround_training`:
 
 [x] 1. File availability and freshness
@@ -120,10 +133,33 @@ Deliverables after completion
   - Helper API for downstream optimiser integration.
 
 Status (2025-10-16)
-  - DecisionTreeRegressor baseline (max_depth=8, min_samples_leaf=20) with port-level median features achieves MAE ≈ 0.73 d on 2025 validation (lookup median baseline: 1.31 d).
-  - HistGradientBoostingRegressor prototype (lr=0.03, log-target) currently trails (MAE ≈ 0.83 d); kept for future tuning but not preferred for production yet.
-  - QA artefacts: `DataSets/Derived/<customer>/QA/ml/port_turnaround_model_report.txt` plus scatter/residual plots (validation and train splits).
-  - Serving plan: expose `predict_days_in_port(...)` that loads artefacts, applies the tree pipeline, falls back to lookup when inputs are sparse.
+ - DecisionTreeRegressor baseline (max_depth=8, min_samples_leaf=20) with port-level median features achieves MAE ≈ 0.73 d on 2025 validation (lookup median baseline: 1.31 d).
+ - HistGradientBoostingRegressor prototype (lr=0.03, log-target) currently trails (MAE ≈ 0.83 d); kept for future tuning but not preferred for production yet.
+ - QA artefacts: `DataSets/Derived/<customer>/QA/ml/port_turnaround_model_report.txt` plus scatter/residual plots (validation and train splits).
+ - Serving plan: expose `predict_days_in_port(...)` that loads artefacts, applies the tree pipeline, falls back to lookup when inputs are sparse.
+
+Next up – Sailing time ML pipeline (2025-10-17)
+ - Prep script: `Models/train_sailing_time_model.py` mirroring the turnaround preparer to enrich voyages with start dates, build categorical keys, and export train/validation splits (`DataSets/Derived/<customer>/ML/sailing_time_train.parquet`, `..._validation.parquet`) alongside `sailing_time_features.json`.
+ - Draft feature layout:
+   • Categorical: `VESSEL_TYPE_ID`, `HAS_CANAL_PASSAGE`, `MONTH_NO`, derived hemisphere/season bucket from voyage start, optional `CANAL_CATEGORY`.
+   • Derived categorical keys: `VESSEL_TYPE_CANAL_KEY`, `VESSEL_TYPE_MONTH_KEY`, possibly `ROUTE_REGION_KEY` if OD regions become available.
+   • Numeric: `BALLAST_FRAC`, `MILES_TOTAL`, `MILES_BALLAST`, `MILES_LOADED`, `DAYS_AT_SEA`, hull dimensions (`DWT_SUMMER`, `DRAFT_SUMMER`, `LOA`, `BEAM`), cargo aggregates, `VESSEL_AGE_YEARS`, `CANAL_COST`.
+   • Target: `HOURS_PER_NM`; consider optional log1p variant if distribution remains skewed.
+ - Splitting strategy: chronological ratio (default `--validation-ratio 0.30`) with option for explicit cutoff (e.g., `--cutoff-date 2025-01-01`); ensure grouping by VOYAGE_ID to avoid leakage.
+ - Follow-on tooling: `Models/fit_sailing_time_model.py` (DecisionTree baseline + optional HGBT) and `Models/plot_sailing_time_model.py` (actual vs predicted & residuals), mirroring existing turnaround scripts.
+ - Documentation: update run guide + thesis notes once scripts land; ensure QA/ML directories capture new reports and metrics.
+
+Status update (2025-10-17)
+ - `uv run` equivalent via project venv: `MasterThesis/.venv/bin/python MasterThesis/Models/train_sailing_time_model.py --customer stena --validation-ratio 0.3`.
+ - Outputs now present under `DataSets/Derived/Stena/ML/`: `sailing_time_train.parquet` (867 rows), `sailing_time_validation.parquet` (372 rows), and `sailing_time_features.json`.
+ - Metadata records feature lists (categorical + derived keys + numeric hull/cargo features), target columns (`HOURS_PER_NM`, `LOG_HOURS_PER_NM`), and split strategy `{type: ratio, validation_ratio: 0.3}`.
+ - Next actions: implement `Models/fit_sailing_time_model.py` & plotting companion, then add QA reporting + thesis notes for model performance.
+ - Added `--no-season-feature` switch for ablation; running with the flag drops `SEASON` from categorical features while keeping row counts identical (867/372). Default run still includes season after re-prepping.
+ - DecisionTree baseline (`fit_sailing_time_model.py --model tree --max-depth 8 --min-samples-leaf 20`):
+   • Train MAE 0.0186 h/nm, RMSE 0.105, sMAPE 8.0 %.
+   • Validation MAE 0.1017 h/nm, RMSE 0.314, sMAPE 37.4 %.
+   • Median baseline (train median hours/nm) performs better: validation MAE 0.0861 h/nm, RMSE 0.357, sMAPE 28.7 % ⇒ model under current features is not yet beating the naive rule.
+ - Ablation run (`--no-season-feature`, saved as `sailing_time_dt_noseason`) returned identical metrics, indicating the season categorical is currently redundant; revisit feature engineering (e.g., richer regional cues) before retesting.
 
 ---
 

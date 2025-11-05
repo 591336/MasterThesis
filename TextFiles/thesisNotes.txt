@@ -1,0 +1,136 @@
+Thesis build notes
+
+Scope
+- Document reproducible decisions for datasets, QA, lookup tables, ML models, and optimiser integration so the thesis can reference concrete choices.
+- Covers current Stena pipelines; Northern Lights inherits the same code paths with different raw extracts.
+- Wording/polish deferred—this file is the factual backbone.
+
+Raw data acquisition
+- SQL exports stored under `DataSets/Raw/Stena/SQL/` (one file per entity) so every CSV can be regenerated from the warehouse.
+- Current port-turnaround cut-off: voyages and port calls through 2024-12-31 (`port_calls_completed_asof_2025-12-31.csv`, `voyages_completed_asof_2025-12-31.csv`, etc.).
+- Sailing-time inputs mirror that structure with dedicated voyage, vessel, and cargo-count extracts valid through 2025-12-31.
+- Upstream constraints: no AIS feeds or live weather joins; all enrichment must come from the exported relational tables or static reference datasets.
+
+Port turnaround dataset (Stena)
+- Build script: `uv run python Models/build_port_turnaround_dataset.py --customer stena`.
+- Row count after cleaning: 1 091 (CSV has 1 header + 1 091 data rows).
+- Core cleaning rules:
+  * Column names upper-cased at load to stabilise joins.
+  * `pd.to_numeric(..., errors="coerce")` used across numeric fields to drop stray strings without crashing.
+  * Guardrail clamp: keep `DAYS_IN_PORT` within [0.04, 10] days; rows outside the band are discarded before modelling.
+  * Within-group tail trimming: 5th–95th percentile inside `(PORT_ID, TERMINAL_ID, IS_BALLAST)` groups to suppress outliers that distort medians.
+  * `VESSEL_TYPE_ID` backfilled from `vessels_reference.csv`; optional tables (`cargo`, `commodity`) treated as empty data frames when missing so the pipeline still runs.
+- Known data gaps for thesis discussion: TERMINAL_ID remains absent for ~90 % of rows; VESSEL_TYPE_ID and COMMODITY coverage deteriorate for one-off ports. These shortages motivate the fallback hierarchy in the lookup and the feature engineering of port-level medians.
+- Outputs: `DataSets/Derived/Stena/port_turnaround_training.(csv|parquet)` plus JSONL log entries for provenance.
+
+Port turnaround QA artefacts
+- Command: `uv run python QA/port_turnaround_dataset_qa.py --customer stena`.
+- Key outputs (all saved under `DataSets/Derived/Stena/QA/`):
+  * `reports/port_turnaround_training_overview.txt` (dtypes, missingness, guardrail summary).
+  * `reports/port_turnaround_training_guardrails.txt` (min/median/max after filters).
+  * `figures/port_turnaround_missingness.svg` and histogram PNGs for residuals/actual-vs-predicted.
+  * `tables/port_turnaround_missingness_by_port.csv`, `..._by_port_terminal.csv`, `..._group_counts.csv` to quantify coverage.
+- Guardrail findings cited in thesis: min 0.20 d, p50 ~1.21 d, max 5.98 d after trimming; no breaches outside [0.04, 10] in the cleaned set.
+
+Port turnaround lookup table
+- Builder: `uv run python Models/port_turnaround_lookup.py --customer stena`.
+- Fallback ladder (L1–L6) with ≥3 observation requirement except for the global final tier:
+  1. (PORT_ID, TERMINAL_ID, IS_BALLAST, VESSEL_TYPE_ID, MONTH_NO)
+  2. (PORT_ID, TERMINAL_ID, IS_BALLAST, VESSEL_TYPE_ID)
+  3. (PORT_ID, TERMINAL_ID, IS_BALLAST)
+  4. (PORT_ID, IS_BALLAST)
+  5. (PORT_ID)
+  6. Global median.
+- All medians clipped to [0.04, 10] days; specificity score retained so optimiser-side helpers can pick the narrowest match.
+- Deliverables: `port_turnaround_lookup.(csv|parquet)` and `port_turnaround_lookup_qa_bins.csv` (distribution across duration bins for reporting).
+
+Port turnaround ML feature prep
+- Command: `uv run python Models/train_port_turnaround_model.py --customer stena --validation-ratio 0.42`.
+- Feature sets baked into `DataSets/Derived/Stena/ML/port_turnaround_features.json`:
+  * Categorical: `PORT_ID`, `TERMINAL_ID`, `IS_BALLAST`, `VESSEL_TYPE_ID`, `MONTH_NO`, `HAS_CANAL_PASSAGE`, `COMMODITY_GROUP_ID`, `COMMODITY_CODE`.
+  * Derived categorical keys: `PORT_TERMINAL_KEY`, `PORT_IS_BALLAST_KEY`.
+  * Numeric: hull dimensions, stoppage durations (`DWT_SUMMER`, `DRAFT_SUMMER`, `LOA`, `BEAM`, `DAYS_STOPPAGES`, `DAYS_EXTRA_IN_PORT`).
+  * Derived numeric priors: `PORT_MEDIAN_DAYS`, `PORT_IS_BALLAST_MEDIAN_DAYS`.
+  * Target columns: `DAYS_IN_PORT`, `LOG_DAYS_IN_PORT`.
+- Splitting strategy:
+  * Chronological ratio split with validation_ratio=0.42 → 633 training rows (≤ ~2024 coverage) and 458 validation rows (2025 hold-out).
+  * Reproduce the historical cutoff by rerunning with the same ratio; providing `--cutoff-date 2025-01-01` mimics the earlier 58/42 split based on voyage start timestamps.
+- Metadata JSON records feature lists, split counts, and creation timestamp for audit trails.
+
+Port turnaround model training & evaluation
+- Command (current production choice): `uv run python Models/fit_port_turnaround_model.py --customer stena --model tree --max-depth 8 --min-samples-leaf 20`.
+- Pipeline: OneHotEncoder + median/most-frequent imputers inside a `ColumnTransformer`, followed by a `DecisionTreeRegressor`. Random state fixed at 42 for reproducibility.
+- Split metadata (recorded in `DataSets/Derived/Stena/ML/port_turnaround_features.json`): chronological ratio `validation_ratio=0.42`, yielding 633 training rows (pre-2025 voyages) and 458 validation rows (2025 hold-out); rerunning with the same ratio reproduces current results.
+- Metrics on Stena validation split (DAYS_IN_PORT scale):
+  * Train MAE 0.63 d, RMSE 1.08 d, sMAPE 38.7 %.
+  * Validation MAE 0.70 d, RMSE 1.07 d, sMAPE 52.6 %.
+  * Baseline (train-median predictor) validation MAE 1.30 d, RMSE 1.69 d, sMAPE 91.7 %.
+- Rationale: the tree maintains interpretability, beats the naive baseline by ~0.6 d MAE, and aligns with domain feedback; deeper trees overfit (observed when relaxing `min_samples_leaf`).
+- Alternative experiment (kept for comparison, not for deployment):
+  * `HistGradientBoostingRegressor` with `--model hgbt --use-log-target --max-leaf-nodes 63 --max-iter 600 --learning-rate 0.03 --min-samples-leaf 50`.
+  * Training MAE dropped to ~0.49 d but validation MAE worsened to ~0.83 d; gains did not materialise on hold-out.
+  * Observed anomaly: reported sMAPE ~1–2 % when `use_log_target=True`, inconsistent with absolute errors—investigate metric calculation before citing in thesis; treat those sMAPE values as invalid pending debug.
+  * Decision: reject the boosted model for now because validation error increases and metric reporting is unreliable; document it as an explored but unsuitable option.
+- Visual diagnostics produced via `uv run python Models/plot_port_turnaround_model.py --customer stena --split validation`, yielding `port_turnaround_validation_actual_vs_pred.png` and residual histograms used in QA packs.
+
+Baseline definition (for thesis write-up)
+- Baseline = constant predictor equal to the training split median turnaround (shown in reports as “Baseline (training median)”).
+- Baseline metrics computed on both train and validation splits using the same statistical median; this quantifies benefit over a naïve rule-of-thumb that operations teams already understand.
+
+Sailing-time dataset (Stena)
+- Build: `uv run python Models/build_sailing_time_dataset.py --customer stena`.
+- Cleaned row count: 1 239 (CSV lines 1 240 including header).
+- Source merges:
+  * Voyages export (`sailing_time_voyages_asof_2025-12-31.csv`) joined with vessel reference (`sailing_time_vessels_reference.csv`) on `(VESSEL_ID, VESSEL_TYPE_ID)`.
+  * Optional cargo counts (`sailing_time_voyage_cargo_counts.csv`) for aggregate cargo tonnage + row counts.
+- Feature engineering:
+  * Target `HOURS_PER_NM = DAYS_AT_SEA * 24 / MILES_TOTAL`.
+  * `BALLAST_FRAC`, `MONTH_NO`, `YEAR`, `VOYAGE_YEAR_MONTH`, `HAS_CANAL_PASSAGE`, `CANAL_COST`, `VESSEL_AGE_YEARS`.
+  * Numeric coercion across distance, duration, hull, and cargo measures.
+  * Rows filtered to 0.02–5.0 hours per nautical mile; records outside this window (likely data errors or extreme delays) removed.
+  * Vessels with names containing “test” dropped during load to keep QA clean.
+- Outputs: `sailing_time_training.(csv|parquet)`, `sailing_time_training_counts.csv`, and appended stats in `sailing_time_dataset_log.jsonl`.
+
+Sailing-time QA and lookup
+- QA command: `uv run python QA/sailing_time_dataset_qa.py --customer stena`; mirrors turnaround QA by producing overview tables, guardrail stats, and missingness summaries under `DataSets/Derived/Stena/sailing_time/QA/`.
+- Lookup builder: `uv run python Models/sailing_time_lookup.py --customer stena`.
+  * Hierarchy: (VESSEL_TYPE_ID, HAS_CANAL_PASSAGE, MONTH_NO) → (VESSEL_TYPE_ID, HAS_CANAL_PASSAGE) → (VESSEL_TYPE_ID) → global.
+  * Minimum support 3 everywhere except the final global fallback; medians clipped to [0.02, 5.0] hours/nm.
+  * `sailing_time_lookup_qa_bins.csv` captures distribution across predefined speed buckets for quick sanity checks.
+
+Sailing-time ML pipeline (planned work to document later)
+- Pending scripts: `Models/train_sailing_time_model.py`, `Models/fit_sailing_time_model.py`, `Models/plot_sailing_time_model.py` (mirroring the turnaround trio).
+- Feature plan:
+  * Categorical: `VESSEL_TYPE_ID`, `HAS_CANAL_PASSAGE`, `MONTH_NO`, hemisphere/season bucket derived from voyage start; optional `CANAL_CATEGORY` once lookup stabilises.
+  * Derived categorical combos: `VESSEL_TYPE_CANAL_KEY`, `VESSEL_TYPE_MONTH_KEY`, future placeholder for OD-region keys when data arrives.
+  * Numeric: `BALLAST_FRAC`, `MILES_TOTAL`, `MILES_BALLAST`, `MILES_LOADED`, `DAYS_AT_SEA`, hull dimensions (`DWT_SUMMER`, `DRAFT_SUMMER`, `LOA`, `BEAM`), cargo aggregates (`TOTAL_CARGO_QUANTITY`, `N_CARGO_ROWS`, `N_UNIQUE_CARGO`), `VESSEL_AGE_YEARS`, `CANAL_COST`.
+  * Target: `HOURS_PER_NM`; retain optional `LOG_HOURS_PER_NM = log1p(HOURS_PER_NM)` to mirror turnaround experiments if skew remains high.
+- Splitting strategy: chronological ratio with `--validation-ratio` (default 0.30) plus optional `--cutoff-date`. Train/validation parquet exports stored under `DataSets/Derived/<customer>/ML/` with metadata JSON (`sailing_time_features.json`) describing feature groups and split sizes.
+- First run (`MasterThesis/.venv/bin/python MasterThesis/Models/train_sailing_time_model.py --customer stena --validation-ratio 0.30`) produced 867 training rows and 372 validation rows; metadata JSON logs the ratio strategy and timestamp for reproducibility.
+- Ablation check: rerunning with `--no-season-feature` removes `SEASON` from the categorical list while keeping split sizes identical (867/372); metadata snapshot stored temporarily for comparison before restoring the default (season-included) feature set.
+- Baselines to capture alongside ML models: global median hours/nm, vessel-type median, closest lookup prediction, and possibly a simple speed-power heuristic if time permits.
+- Evaluation: MAE, RMSE, sMAPE (%), residual P50/P80 (hours) to satisfy stakeholder request for confidence intervals.
+- Initial DecisionTreeRegressor (`fit_sailing_time_model.py --model tree --max-depth 8 --min-samples-leaf 20`):
+  * Train MAE 0.0186 h/nm, RMSE 0.105, sMAPE 8.0 %.
+  * Validation MAE 0.1017 h/nm, RMSE 0.314, sMAPE 37.4 %.
+  * Baseline (training median hours/nm) validation MAE 0.0861 h/nm, RMSE 0.357, sMAPE 28.7 % → current tree lags behind naive median; action item: enrich features or swap estimator.
+- Season ablation (`--no-season-feature`, artefact `sailing_time_dt_noseason`) produced identical metrics, confirming the current `SEASON` categorical is neutral; mark for future revisit once regional/seasonal proxies improve.
+- Restrictions reaffirmed: no AIS or metocean features until static proxies (e.g., season, canal flag) are exhausted; seasonal analysis added to backlog.
+
+Optimizer integration plan
+- Port turnaround helper (existing): expose `get_turnaround_time(port_id, terminal_id, is_ballast, vessel_type_id, month_no)` that walks the lookup ladder and returns both the chosen median and metadata (`n_obs`, level, specificity score).
+- Sailing time helper (to be built): `get_sailing_time(distance_nm, vessel_type_id, has_canal_passage, month_no)` returning travel hours plus context about which tier supplied the rate.
+- Optimiser workflow will multiply sailing-time rates by route legs, add turnaround medians at load/discharge ports, and feed totals into scheduling/assignment heuristics.
+- Future endpoint concept: wrap both helpers and the ML models behind a service (`/predict/turnaround`, `/predict/sailing_time`) that accepts voyage/port-call payloads; training artefacts saved under `Models/Artifacts/<customer>/` already contain the fitted pipelines.
+
+Backlog & thesis talking points
+- Metric hygiene: fix sMAPE computation when `use_log_target=True` so percentages remain interpretable; report both absolute (hours/days) and percentage errors in the thesis.
+- Residual analytics: extend QA scripts to emit P50/P80 residuals for both models, satisfying recommendation to publish confidence bands.
+- Model tuning roadmap: optional LightGBM/XGBoost pass with early stopping once baseline story is locked; document hyperparameter grids and stopping criteria if executed.
+- Robustness checks: consider rolling-origin validation (train ≤2023, validate 2024; train ≤2024, validate 2025) to demonstrate temporal stability.
+- Seasonal effects: backlog analysis to quantify month/season shifts given the constraint of no live weather.
+- Metocean enrichment (phase 2 idea only): route samplers with ERA5/WW3/CMEMS reanalysis for headwinds/currents—documented as future work, not scheduled.
+
+Documentation hygiene
+- Whenever pipelines are updated, mirror the changes in `README.md`, `TextFiles/runGuide.txt`, `TextFiles/contextHelper.txt`, and this thesis log so the thesis narrative stays aligned with the code base.
+- Progress specific to Saga/Stena is tracked in `TextFiles/progressLog_Saga.txt`; use this thesis log for decisions worth citing academically.
