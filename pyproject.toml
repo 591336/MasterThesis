@@ -10,6 +10,7 @@ dependencies = [
     "pyarrow>=18.1.0",
     "matplotlib>=3.10.6",
     "pydantic>=2.11.9",
+    "pulp>=2.8.0",
 ]
 
 [dependency-groups]

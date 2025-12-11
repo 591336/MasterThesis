@@ -18,6 +18,11 @@ Environment notes:
   - All dataset/QA scripts accept `--customer northernlights|stena` (default Northern Lights) to switch raw/derived folders.
 
 Port turnaround ML experiments (Stena – 2025-10-17)
+ Update 2025-12-04 – leakage-free medians (Stena)
+ - Port and port×ballast medians now computed on the training fold only (post-split) and applied to both splits to remove validation leakage.
+ - Refit results (validation ratio 0.42): DecisionTree MAE 1.27 d / RMSE 1.77 d; HGBT (log-target) MAE 1.18 d / RMSE 1.76 d; median baseline MAE 1.30 d. Leakage removed, but lift shrank; need smoothing/target encoding to recover gains.
+ - Next ML actions: add count-weighted/Laplace-smoothed train-only priors; evaluate target encoding for sparse categories; re-run DT/HGBT benchmarks and QA plots once improved.
+ Historical baseline (pre-leakage fix – 2025-10-17)
  - DecisionTreeRegressor (`uv run python Models/fit_port_turnaround_model.py --customer stena --model tree --max-depth 8 --min-samples-leaf 20`):
    • Train: MAE 0.63 d, RMSE 1.08 d, sMAPE 38.7 %.
    • Validation (chronological ratio 58/42 → 633 train, 458 val): MAE 0.70 d, RMSE 1.07 d, sMAPE 52.6 %.
@@ -212,11 +217,29 @@ Status (2025-10-16)
   - Research-informed roadmap: start with tabular boosting (LightGBM/XGBoost) on current features, report MAE/sMAPE + residual percentiles; plan metocean enrichment (ERA5, WW3, CMEMS/OSCAR) for Phase 2, and consider grey-box residuals for physics robustness.
   - Splitting strategy will mirror port turnaround (time cutoff or `--validation-ratio`), with grouped/rolling splits for robustness documented in thesis.
 
- Deliverables after completion
-  - sailing_time_training.csv (clean dataset for QA/ML).
-  - sailing_time_lookup.csv (ready for solver).
-  - get_sailing_time() function.
-  - Validation plots and QA counts.
+Deliverables after completion
+ - sailing_time_training.csv (clean dataset for QA/ML).
+ - sailing_time_lookup.csv (ready for solver).
+ - get_sailing_time() function.
+ - Validation plots and QA counts.
+
+---
+
+Optimizer integration context (frontend/data plumbing) – 2025-12-04
+ - Scenario selection flow: `getScenarioSelector` typeahead queries `TSModelType.scenario` with fields {scenarioCode, scenarioName, isBudget, fleetPlan{code,name}, budgetVersion.name}; filters by isBudget and ignores budget scenarios for fleet plans. Selected scenario stored in selectedTSModel slice and feeds `getFleetPlansData`.
+ - Loader orchestration: `ScenarioActions` reacts to selectedScenario changes; per-tab loaders fire (Open Positions, Scheduler, Cargo Mgmt, Voyages, Cargoes) plus `scenarioActions.loadFleetPlanData` for vessels. Filters always include scenario.key and date window from `FLEET_PLANS_DATE_FILTER_CODE`; MASTER adds vesselCodes.isSchedulable=true.
+ - Data pulled per tab: vessels (FAS_SCENARIO_VESSELS_ID), unallocated voyages/commitments (FAS_SCENARIO_VOYAGES_ID) with tab-specific fields, allocated fleet plan voyages (FAS_FLEET_PLAN_VOYAGES_ID or comparing ID), vessel open positions (FAS_VESSEL_OPEN_POSITIONS_ID), unallocated cargos (FAS_SCENARIO_CARGOS_ID). Scheduler comparison loads a second scenario’s fleet plan voyages.
+ - Actions available: create/allocate voyage (`FasFleetPlanVoyageApi.createAndAllocate`), move (`.move`), unallocate/remove (`.unallocate`, cargo allocate/copy). After changes, prefer targeted reloads (`ScenarioActions.reloadColumnData(grouping, source, target)` or tab-specific load* with vesselKeys) over full refresh.
+ - Optimizer inputs to expect: scenario identity (key/code, fleetPlan.key; skip isBudget), active date window filters, current datasets (vessels, unallocated voyages, fleet plan voyages with sequence, open positions, cargos, optional compare scenario). Outputs should call voyage/cargo APIs and trigger targeted refreshes.
+ - New scaffolds: 
+    • `Models/optimizer.py` defines adapters for model access, `OptimizerRequest`/`OptimizerResult`, action types (allocate/move/unallocate), and a GreedyOptimizer placeholder that assigns unallocated voyages round-robin across vessels using column hints. Seeded randomness; logs note that constraints/model scores are not yet applied.
+    • `Models/optimizer_mip.py` adds an arc-based MIP prototype (pulp/CBC). It builds vessel-specific start/end dummies, binary arc vars, start-time vars, unserved penalties, and early/late slack on time windows. Turnaround times come from the adapter; sailing times now call the sailing-time adapter (fallback 1.0). Vessel availability timestamps and voyage laycans (if provided) set time-window bounds; big-M derives from the scenario window. Outputs allocate actions from the selected arcs; falls back to greedy if no incumbent.
+
+Optimizer next steps
+ - Define optimizer interface (`solve_plan(request)` or class) that ingests the scenario datasets above plus model adapters (turnaround, sailing-time, lookups).
+ - Wrap model access in adapters with fallback to lookups/medians and deterministic seeding; log which fallback tier was used.
+ - Implement a minimal heuristic search over vessel × voyage allocation for the active fleet-plan window, honoring constraints and returning chosen actions (create/move/unallocate) plus a refresh plan (which loaders to call).
+ - Once scaffolded, plug in current models (even if modest) to exercise the flow, then revisit model tuning (smoothed priors/target encoders) without changing the optimizer interface.
 
 
 Meeting Notes – 2025-10-05

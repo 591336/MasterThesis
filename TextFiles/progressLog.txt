@@ -112,3 +112,7 @@
 2025-10-16T12:26:00+02:00 - Sailing time QA + lookup
   - Added `QA/sailing_time_dataset_qa.py` to produce overview, guardrail, missingness, and group coverage artefacts under `DataSets/Derived/<customer>/sailing_time/QA/`.
   - Implemented `Models/sailing_time_lookup.py` (hierarchy: vessel type → canal flag → month → global) with support thresholds; lookup saved to `DataSets/Derived/<customer>/sailing_time/sailing_time_lookup.(csv|parquet)` plus QA bins.
+2025-12-04T09:42:53+01:00 - Train-only medians for port turnaround ML
+  - Reworked feature prep to compute port and port×ballast medians on the training fold after splitting to avoid validation leakage.
+  - Regenerated Stena splits (`--validation-ratio 0.42`) and refit DecisionTree/HistGradientBoosting baselines; validation MAE now 1.27 d (DT) and 1.18 d (HGBT) vs median baseline 1.30 d, confirming leakage removal but weaker generalisation.
+  - Next: explore smoothed train-only priors (count-weighted medians) or target encoding to regain lift without leakage.

@@ -6,13 +6,13 @@ Split: chronological ratio
   n_validation=458
 
 Model metrics:
-  Train MAE: 0.630
-  Train RMSE: 1.075
-  Train sMAPE: 38.69%
+  Train MAE: 0.455
+  Train RMSE: 0.865
+  Train sMAPE: 29.29%
 
-  Validation MAE: 0.703
-  Validation RMSE: 1.070
-  Validation sMAPE: 52.58%
+  Validation MAE: 1.180
+  Validation RMSE: 1.760
+  Validation sMAPE: 86.44%
 
 Baseline (training median) comparison:
   Validation MAE: 1.299

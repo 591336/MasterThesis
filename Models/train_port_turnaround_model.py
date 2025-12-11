@@ -36,7 +36,7 @@ CATEGORICAL_FEATURES: Tuple[str, ...] = (
 DERIVED_CATEGORICAL_FEATURES: Tuple[str, ...] = (
     "PORT_TERMINAL_KEY",
     "PORT_IS_BALLAST_KEY",
-) 
+)
 
 NUMERIC_FEATURES: Tuple[str, ...] = (
     "DWT_SUMMER",
@@ -176,23 +176,6 @@ def enrich_features(df: pd.DataFrame, voyages: pd.DataFrame) -> pd.DataFrame:
         if col in merged.columns:
             merged[col] = pd.to_numeric(merged[col], errors="coerce")
 
-    # Aggregate features across full modelling view (acts as strong priors)
-    port_median = merged.groupby("PORT_ID")[TARGET_COLUMN].median()
-    merged["PORT_MEDIAN_DAYS"] = merged["PORT_ID"].map(port_median)
-
-    port_ballast_median = merged.groupby(["PORT_ID", "IS_BALLAST"])[TARGET_COLUMN].median().to_dict()
-    merged["PORT_IS_BALLAST_MEDIAN_DAYS"] = [
-        port_ballast_median.get((pid, ballast), np.nan)
-        for pid, ballast in zip(merged["PORT_ID"], merged["IS_BALLAST"])
-    ]
-    merged["PORT_IS_BALLAST_MEDIAN_DAYS"] = merged["PORT_IS_BALLAST_MEDIAN_DAYS"].fillna(
-        merged["PORT_MEDIAN_DAYS"]
-    )
-    merged["PORT_MEDIAN_DAYS"] = merged["PORT_MEDIAN_DAYS"].fillna(merged[TARGET_COLUMN].median())
-    merged["PORT_IS_BALLAST_MEDIAN_DAYS"] = merged["PORT_IS_BALLAST_MEDIAN_DAYS"].fillna(
-        merged[TARGET_COLUMN].median()
-    )
-
     merged[LOG_TARGET_COLUMN] = np.log1p(merged[TARGET_COLUMN])
     return merged
 
@@ -229,6 +212,33 @@ def perform_ratio_split(
     cutoff_series = val_df["VOYAGE_START_DATE"].dropna()
     cutoff_ts = cutoff_series.iloc[0].to_pydatetime() if not cutoff_series.empty else None
     return train_df, val_df, cutoff_ts
+
+
+def compute_train_only_medians(train_df: pd.DataFrame) -> tuple[pd.Series, dict[tuple[int, int], float], float]:
+    port_median = train_df.groupby("PORT_ID")[TARGET_COLUMN].median()
+    port_ballast_median = train_df.groupby(["PORT_ID", "IS_BALLAST"])[TARGET_COLUMN].median().to_dict()
+    global_median = float(train_df[TARGET_COLUMN].median())
+    return port_median, port_ballast_median, global_median
+
+
+def apply_medians(
+    df: pd.DataFrame,
+    port_median: pd.Series,
+    port_ballast_median: dict[tuple[int, int], float],
+    global_median: float,
+) -> pd.DataFrame:
+    with_medians = df.copy()
+    with_medians["PORT_MEDIAN_DAYS"] = with_medians["PORT_ID"].map(port_median)
+    with_medians["PORT_IS_BALLAST_MEDIAN_DAYS"] = [
+        port_ballast_median.get((pid, ballast), np.nan)
+        for pid, ballast in zip(with_medians["PORT_ID"], with_medians["IS_BALLAST"])
+    ]
+    with_medians["PORT_IS_BALLAST_MEDIAN_DAYS"] = with_medians["PORT_IS_BALLAST_MEDIAN_DAYS"].fillna(
+        with_medians["PORT_MEDIAN_DAYS"]
+    )
+    with_medians["PORT_MEDIAN_DAYS"] = with_medians["PORT_MEDIAN_DAYS"].fillna(global_median)
+    with_medians["PORT_IS_BALLAST_MEDIAN_DAYS"] = with_medians["PORT_IS_BALLAST_MEDIAN_DAYS"].fillna(global_median)
+    return with_medians
 
 
 def export_splits(
@@ -297,22 +307,21 @@ def main() -> None:
     voyage_dates = load_voyage_dates(paths)
     enriched = enrich_features(raw_training, voyage_dates)
 
-    selected_columns = list(
+    base_columns = list(
         CATEGORICAL_FEATURES
         + DERIVED_CATEGORICAL_FEATURES
         + NUMERIC_FEATURES
-        + DERIVED_NUMERIC_FEATURES
     ) + [
         TARGET_COLUMN,
         LOG_TARGET_COLUMN,
         "VOYAGE_ID",
         "VOYAGE_START_DATE",
     ]
-    missing_cols = [col for col in selected_columns if col not in enriched.columns]
+    missing_cols = [col for col in base_columns if col not in enriched.columns]
     if missing_cols:
         raise ValueError(f"Expected columns missing from enriched dataset: {', '.join(missing_cols)}")
 
-    dataset = enriched[selected_columns]
+    dataset = enriched[base_columns]
 
     if args.validation_ratio is not None:
         train_df, val_df, cutoff_ts = perform_ratio_split(dataset, args.validation_ratio)
@@ -331,7 +340,25 @@ def main() -> None:
             "n_validation": int(len(val_df)),
         }
 
-    splits = export_splits(paths, train_df, val_df, cutoff_ts, selected_columns, split_strategy)
+    port_median, port_ballast_median, global_median = compute_train_only_medians(train_df)
+    train_df = apply_medians(train_df, port_median, port_ballast_median, global_median)
+    val_df = apply_medians(val_df, port_median, port_ballast_median, global_median)
+
+    ordered_columns = list(
+        CATEGORICAL_FEATURES
+        + DERIVED_CATEGORICAL_FEATURES
+        + NUMERIC_FEATURES
+        + DERIVED_NUMERIC_FEATURES
+    ) + [
+        TARGET_COLUMN,
+        LOG_TARGET_COLUMN,
+        "VOYAGE_ID",
+        "VOYAGE_START_DATE",
+    ]
+    train_df = train_df[ordered_columns]
+    val_df = val_df[ordered_columns]
+
+    splits = export_splits(paths, train_df, val_df, cutoff_ts, ordered_columns, split_strategy)
 
     print(f"[{paths.key}] Prepared ML feature dataset")
     print(f"  Training rows:   {splits.train_size:,} -> {splits.train_path.relative_to(ROOT)}")
