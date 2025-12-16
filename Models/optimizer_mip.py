@@ -133,6 +133,15 @@ def build_arcs(
             ref_candidates.append(ts)
     ref_time = min(ref_candidates) if ref_candidates else pd.Timestamp("1970-01-01")
 
+    # Sort voyages by earliest available time (laycan start or voyage start)
+    time_rank: Dict[str, float] = {}
+    for vk in voyage_keys:
+        a_j, _ = time_windows.get(vk, (None, None))
+        ts = a_j if isinstance(a_j, pd.Timestamp) else voyage_rows.loc[vk].get(col_start)
+        ts = ts if isinstance(ts, pd.Timestamp) else None
+        time_rank[vk] = to_days(ts, ref_time) if ts else float("inf")
+    sorted_voyages = sorted(voyage_keys, key=lambda k: time_rank.get(k, float("inf")))
+
     arcs: List[ArcData] = []
     for vessel_key in vessel_keys:
         start_node = f"O_{vessel_key}"
@@ -174,11 +183,9 @@ def build_arcs(
             )
 
         # simple nearest-in-time arcs between jobs (capped)
-        limited = voyage_keys[:max_arcs_per_job] if len(voyage_keys) > max_arcs_per_job else voyage_keys
-        for i in limited:
-            for j in voyage_keys:
-                if i == j:
-                    continue
+        for idx, i in enumerate(sorted_voyages):
+            neighbors = sorted_voyages[idx + 1 : idx + 1 + max_arcs_per_job]
+            for j in neighbors:
                 row_j = voyage_rows.loc[j]
                 miles = pd.to_numeric(row_j.get("MILES_DIRECT"), errors="coerce")
                 fallback_sail = float(miles) / default_speed_knots / 24.0 if pd.notna(miles) else 1.0
@@ -186,10 +193,12 @@ def build_arcs(
                 tau_j = turnaround_map.get(j, 1.0)
                 cost = sail_time + tau_j
                 a_i, b_i = time_windows.get(i, (None, None))
-                a_j, b_j = time_windows.get(j, (None, None))
                 depart = a_i or b_i or request.date_window.start_date or avail_ts
                 depart_days = to_days(depart, ref_time)
-                latest_j = to_days(b_j, ref_time) + window_slack_days if b_j else None
+                latest_j = None
+                _, b_j = time_windows.get(j, (None, None))
+                if b_j is not None:
+                    latest_j = to_days(b_j, ref_time) + window_slack_days
                 arrival = depart_days + turnaround_map.get(i, 0.0) + sail_time + tau_j
                 if latest_j is not None and arrival > latest_j:
                     continue
@@ -215,6 +224,7 @@ def solve_mip(
     window_slack_days: float = 2.0,
     default_speed_knots: float = 12.0,
     default_turnaround_days: float = 1.0,
+    unserved_penalty: float = 1_000.0,
 ) -> OptimizerResult:
     arcs, turnaround_map, time_windows, vessel_available, unserved_penalty = build_arcs(
         request,
@@ -223,6 +233,7 @@ def solve_mip(
         window_slack_days=window_slack_days,
         default_speed_knots=default_speed_knots,
         default_turnaround_days=default_turnaround_days,
+        unserved_penalty=unserved_penalty,
     )
     logs: List[str] = []
     actions: List[OptimizerAction] = []
