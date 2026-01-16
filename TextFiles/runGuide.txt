@@ -57,3 +57,39 @@ General tips
   - Prefer `uv run <cmd>` so dependency resolution stays consistent across OSes.
   - If PowerShell blocks scripts, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once.
   - Commit generated figures/text outputs to track data snapshots referenced in the thesis.
+
+Optimizer sample + evaluation
+  - Run MIP experiments on the Stena sample scenario:
+    * `uv run python Models/run_optimizer_sample.py`
+    * Run a single experiment:
+      - `uv run python Models/run_optimizer_sample.py --experiment manual_match_physical --time-limit-sec 60`
+    * Laycan policy toggles (global overrides):
+      - Hard laycan end (strict feasibility): `--laycan-end hard`
+      - Soft laycan end (penalized lateness): `--laycan-end soft --late-penalty-scale 0.001`
+      - Soft + cap lateness (recommended if not hard): `--laycan-end soft --max-late-days 2`
+    * Outputs:
+      - `Visualizations/output/allocations_<experiment>.csv`
+      - `Visualizations/output/schedule_<experiment>.csv`
+    * Experiments include: `subset_ml_proxy`, `subset_physical`, `manual_match`, `manual_match_physical`.
+  - Evaluate physical feasibility + manual overlap (writes a small TXT report):
+    * `uv run python Models/evaluate_optimizer_output.py --experiment subset_ml_proxy`
+    * `uv run python Models/evaluate_optimizer_output.py --experiment subset_physical`
+    * `uv run python Models/evaluate_optimizer_output.py --experiment manual_match`
+    * `uv run python Models/evaluate_optimizer_output.py --experiment manual_match_physical`
+    * Outputs: `Visualizations/output/eval_<experiment>.txt`
+  - Generate a quick Gantt chart of the latest subset run:
+    * `uv run python Visualizations/gantt_viz.py`
+
+Thesis demo bundle (recommended)
+  - Generates the thesis-ready artefacts for the manual set, including a strict-feasibility run and a coverage-first contrast run:
+    * `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis`
+    * Enforce thesis “good enough” gates (non-zero exit on failure):
+      - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --require-gates`
+    * Tip: use a date-coded prefix (e.g. `--output-prefix thesis_2026-01-07`) to preserve snapshots.
+  - Thesis writing aids (schemas + parameter snapshot):
+    * `TextFiles/thesisDemoInputSchemas.txt`
+    * `TextFiles/thesisDemoParameterSnapshot.txt`
+  - Outputs under `Visualizations/output/`:
+    * `allocations_thesis_manual_match_physical.csv`, `schedule_thesis_manual_match_physical.csv`, `eval_thesis_manual_match_physical.txt`, `gantt_thesis_manual_match_physical.png`
+    * `allocations_thesis_manual_match_coverage.csv`, `schedule_thesis_manual_match_coverage.csv`, `eval_thesis_manual_match_coverage.txt`, `gantt_thesis_manual_match_coverage.png`
+    * `thesis_demo_summary.txt`

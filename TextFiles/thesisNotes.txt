@@ -123,6 +123,27 @@ Optimizer integration plan
 - Optimiser workflow will multiply sailing-time rates by route legs, add turnaround medians at load/discharge ports, and feed totals into scheduling/assignment heuristics.
 - Future endpoint concept: wrap both helpers and the ML models behind a service (`/predict/turnaround`, `/predict/sailing_time`) that accepts voyage/port-call payloads; training artefacts saved under `Models/Artifacts/<customer>/` already contain the fitted pipelines.
 
+Thesis-ready vs business-ready (optimiser)
+- Thesis-ready target: reproducible prototype runs on the Stena sample scenario with physically consistent schedules and thesis-ready evaluation artefacts (CSV + TXT + Gantt).
+- Business-ready target: production integration, full constraint coverage, performance guarantees at scale, and automated QA/monitoring (explicitly out of scope for the thesis MVP).
+
+Optimizer thesis demo (Stena sample scenario)
+- Single-command demo runner (writes stable artefacts under `Visualizations/output/`):
+  * `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --require-gates`
+- This produces two runs for the thesis narrative:
+  1) Strict feasibility (hard laycan end): `eval_thesis_manual_match_physical.txt`
+     * Actions served: 47/62
+     * Feasibility gates: overlaps=0, missing_times=0, laycan start/end violations=0
+     * Manual overlap: 47 voyages overlap by id; 23 match the same vessel assignment
+     * Key artefacts: `allocations_thesis_manual_match_physical.csv`, `schedule_thesis_manual_match_physical.csv`, `gantt_thesis_manual_match_physical.png`
+  2) Coverage-first (lateness allowed): `eval_thesis_manual_match_coverage.txt`
+     * Actions served: 52/62
+     * Feasibility gates: overlaps=0, missing_times=0
+     * Laycan-end violations: 43 (start > laycan end)
+     * Manual overlap: 52 voyages overlap by id; 23 match the same vessel assignment
+     * Key artefacts: `allocations_thesis_manual_match_coverage.csv`, `schedule_thesis_manual_match_coverage.csv`, `gantt_thesis_manual_match_coverage.png`
+- Thesis framing: strict run is the “physically realistic” baseline; coverage-first run demonstrates the trade-off when softening laycans.
+
 Backlog & thesis talking points
 - Metric hygiene: fix sMAPE computation when `use_log_target=True` so percentages remain interpretable; report both absolute (hours/days) and percentage errors in the thesis.
 - Residual analytics: extend QA scripts to emit P50/P80 residuals for both models, satisfying recommendation to publish confidence bands.

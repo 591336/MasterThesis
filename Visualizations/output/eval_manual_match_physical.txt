@@ -1,0 +1,13 @@
+Experiment: manual_match_physical
+Actions: 47
+Vessels used: 20
+Max legs per vessel: 5
+Overlaps (count): 0
+Missing times (start/end): 0
+Laycan start violations: 0
+Laycan end violations (start>laycan_end): 0
+
+Manual overlap:
+  Manual voyages: 62
+  Overlap on voyage id: 47
+  Overlap with same vessel: 23

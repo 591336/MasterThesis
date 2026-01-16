@@ -235,12 +235,30 @@ Optimizer integration context (frontend/data plumbing) – 2025-12-04
     • `Models/optimizer.py` defines adapters for model access, `OptimizerRequest`/`OptimizerResult`, action types (allocate/move/unallocate), and a GreedyOptimizer placeholder that assigns unallocated voyages round-robin across vessels using column hints. Seeded randomness; logs note that constraints/model scores are not yet applied.
     • `Models/optimizer_mip.py` adds an arc-based MIP prototype (pulp/CBC). It builds vessel-specific start/end dummies, binary arc vars, start-time vars, unserved penalties, and early/late slack on time windows. Turnaround times come from the adapter; sailing times now call the sailing-time adapter (fallback uses `MILES_DIRECT/12 kn`). Vessel availability timestamps and voyage laycans (from cargo when present) set time-window bounds; big-M derives from the scenario window. Outputs allocate actions from the selected arcs; falls back to greedy if no incumbent.
     • `Models/run_optimizer_sample.py` runs sample experiments on the Stena sample data; proxy predictors used (sailing from `MILES_DIRECT`, turnaround=1d). Experiments tried: baseline (65 vessels/324 voyages, penalty 1000, arcs/job=5) → 65 single-leg allocations; tuned low penalty (penalty 100, arcs/job=10, 60s) → 65 single-leg allocations; subset (10 vessels/30 voyages) → still single-leg. Chaining not observed yet—arc feasibility + missing availability and economic incentives keep solutions at one leg per vessel. Date parsing warnings persist until date formats are explicitly set.
+    • Updated exports: `vessels_with_availability.csv` (VESSEL_OPEN_PORT_ID, VESSEL_AVAILABLE_UTC) and `unallocated_voyages_detailed.csv` (laycans, miles, ports, and economics: FREIGHT, GROSS/NET_FREIGHT, FREIGHT_COST, PORT/HANDLING/CANAL/FO/DO/VARIOUS/RUNNING costs, VARIOUS_REVENUE). Sailing-time ML adapter wired; turnaround adapter still constant pending port features. Profit-based arc costs being introduced (revenue − costs).
 
 Optimizer next steps
  - Define optimizer interface (`solve_plan(request)` or class) that ingests the scenario datasets above plus model adapters (turnaround, sailing-time, lookups).
  - Wrap model access in adapters with fallback to lookups/medians and deterministic seeding; log which fallback tier was used.
  - Implement a minimal heuristic search over vessel × voyage allocation for the active fleet-plan window, honoring constraints and returning chosen actions (create/move/unallocate) plus a refresh plan (which loaders to call).
  - Once scaffolded, plug in current models (even if modest) to exercise the flow, then revisit model tuning (smoothed priors/target encoders) without changing the optimizer interface.
+
+FuelEU Maritime – Regulatory Context (authoritative, 2025)
+ - Scope: Ships > 5,000 GT on voyages calling EU ports, in force from 2025, covers CO2/CH4/N2O, Well-to-Wake. GHG intensity targets: -2% in 2025 ramping to -80% by 2050. Compliance via financial penalties.
+ - Key fuel inputs: LCV (MJ/g), EF_WtT (gCO2e/MJ), EF_TtW (gCO2e/MJ). Energy accounting uses EU ETS-adjusted fuel consumption (m_fuel).
+ - Core variables: m_fuel (tonnes), LCV, EF_WtT, EF_TtW, E_total (MJ), GHG_intensity (gCO2e/MJ), GHG_limit, Compliance Balance (CB), Penalty_price (EUR/t CO2e).
+ - GHG intensity calc: E_total = m_fuel * LCV * 1e6; WtT = E_total * EF_WtT; TtW = m_fuel * EF_TtW * 1e6; GHG_intensity = (WtT+TtW)/E_total.
+ - Compliance balance: CB_raw = (GHG_limit − GHG_intensity) * E_total; CB_CO2 = CB_raw / ((GHG_intensity/1e6)*41,000). Penalty applies if CB_CO2 < 0: Penalty = |CB_CO2| * Penalty_price.
+ - Implementation notes: calculate per fuel then aggregate; GHG limits depend on voyage start year; penalties reported in voyage P&L. Optimizer objective can trade fuel mix/routing vs penalties; use P50/P80 buffers for uncertainty.
+
+Restricted Areas – Regulatory Context (authoritative)
+ - Purpose: Geographic zones with special environmental/operational rules that constrain fuel categories, engine usage, scrubber requirements, and open-loop permissions.
+ - Core fields: code, name, start_date, end_date (nullable), open_loop_restricted (bool), geojson boundary. Area is active if start_date ≤ voyage_date ≤ end_date (or end_date null).
+ - Fuel allowance: A bunker category is legal only if explicitly allowed for the engine type; if open_loop_restricted=true, then bunker.open_loop_allowed must be false; if scrubber_required=true, vessel must have scrubber. Treat missing/undefined permissions as disallowed.
+ - Priority: Each allowed fuel has a priority (lower = preferred) per area; used as a secondary objective after legality/cost.
+ - Optimisation implications: route → applicable areas; applicable areas → legal fuels per leg; overlapping areas must all be satisfied. Objective order: compliance (hard), availability/capability, cost, priority.
+ - Data governance: restricted area data treated read-only for optimisation; only superusers may create/delete areas, edit boundaries, open-loop flags, priorities, or allowed fuel lists.
+ - Implementation notes: evaluate at leg level; cache spatial intersections; ignore expired areas; enforce legality first, then apply priority/cost.
 
 
 Meeting Notes – 2025-10-05
@@ -270,3 +288,98 @@ Talking points for advisor meeting
 - Highlight current data limitations (terminal IDs + vessel metadata) and the concrete upstream actions requested to unblock finer segmentation.
 - Outline how the lookup’s fallback structure will evolve with richer data and how it will feed the optimiser in later phases.
 - Flag that Step 1 documentation (README, context helper, run guide) now captures Windows + macOS workflows, supporting industry collaboration later in the project.
+
+[Optimizer update - 2025-12-18 09:08]
+- Tightened arc feasibility: dest->origin haversine sailing times, vessel open port for start arcs, laycan start/availability for start arcs, tau_i used on job->job arcs.
+- Window slack reduced to 2 days (was 5).
+- Sample run (10 vessels/30 voyages): arcs=1060 (start late=300, job_job=460, job_job_late=2840); solver Optimal; 14 allocations served.
+- Gantt regenerated with slack=2; outputs in Visualizations/output/gantt_sample.png and gantt_schedule.csv.
+
+[Optimizer update - 2025-12-18 09:17]
+- Set window slack to 3 days (previously 2).
+- Removed broken non-overlap heuristic for now; added dest->origin haversine sailing times and stricter start feasibility remain.
+- Sample run (10 vessels/30 voyages): arcs=1082 (start late=300, job_job=482, job_job_late=2818); solver Optimal; 15 allocations served.
+- Gantt regenerated with slack=3: Visualizations/output/gantt_sample.png and gantt_schedule.csv.
+
+[Manual vs Optimizer - 2025-12-18 09:23]
+- Manual plan: 62 voyages across 30 vessels (fleet_plan_id=1013798). Longest sequences: Largo Evolution (8 legs), Almi Galaxy/Dee4 Juniper/etc (3-4 legs).
+- Optimizer (current run, slack=3): 15 voyages served; overlap with manual = 5 voyages, manual-only=57, opt-only=10.
+- Examples of divergence: Dee4 Mahogany manual has 3 legs (1061928,1275456,1219985) vs optimizer 1 leg (1051260). Almi Galaxy manual 4 legs vs optimizer 1 leg (different voyage). Dee4 Juniper manual 4 legs vs optimizer 1 different leg. Dallas manual 1 leg vs optimizer 2 different legs.
+- Likely cause: our stricter laycan/availability pruning and lack of explicit non-overlap with full time propagation reduce feasible arcs; optimizer subset (10 vessels/30 voyages) also misses much of the manual set (manual has 62 voyages).
+
+[Manual match run - 2025-12-18 10:16]
+- Ran manual_match: 30 vessels, 62 voyages (manual set), slack=3, max_arcs_per_job=6, time_limit=90s.
+- Result: solver Optimal, arcs=9203 (start late=1690, job_job=5483, job_job_late=5047), 62 allocations served (covers all manual voyages).
+- Mapping differs: per-vessel legs often mismatch manual sequences (e.g., Largo Evolution manual 8 legs vs opt 1; Dee4 Juniper manual 4 vs opt 8, with 0 overlapping legs).
+- Actions saved to Visualizations/output/allocations_manual_match.csv.
+- Visual skew reduced: Gantt now auto-sets x-limits to data span with buffer.
+
+[Manual match + profit-ish objective - 2025-12-18 10:29]
+- Set arc cost to negative profit proxy ((costs - revenue - various_rev)/1e6) without time terms.
+- Manual_match run (30 vessels, 62 manual voyages, slack=3, max_arcs_per_job=6, 90s): solver Optimal, arcs=9203, 62 allocations served (all manual voyages), objective≈24.41M.
+- Mapping still divergent: per-vessel overlap remains near zero; example: Largo Evolution manual 8 legs vs opt 1 (0 overlap), Dee4 Juniper manual 4 vs opt 10 (1 overlap).
+- Allocations saved: Visualizations/output/allocations_manual_match.csv.
+
+[Manual match + non-overlap attempt - 2025-12-18 10:47]
+- Enabled enforce_nonoverlap (pairwise disjunctive) with profit proxy cost.
+- Manual_match run: 30 vessels, 62 voyages, slack=3, max_arcs_per_job=6, 90s. Solver Optimal. Arcs=9203; allocations=61 (missed 1 manual voyage). Objective≈28.74M.
+- Coverage: 61/62 manual voyages; per-vessel overlap still near zero (e.g., Largo Evolution manual 8 legs -> 0 opt legs; Dee4 Juniper manual 4 -> opt 9 with 1 overlap).
+- Allocations saved: Visualizations/output/allocations_manual_match.csv.
+- Full overlap yet to achieve; need tighter availability/turnaround sequencing and a soft preference to keep manual vessel where feasible.
+
+[Optimizer update - 2026-01-07]
+- Fixed sailing-time unit contract: `Models/optimizer_adapters.py` now converts the ML output (HOURS_PER_NM) into sailing duration (days) using voyage miles, so the MIP time propagation is dimensionally consistent.
+- Reworked time propagation and schedule export in `Models/optimizer_mip.py`: treat `t[j]` as the job start time; enforce `t[j] >= t[i] + duration(i) + reposition(i→j)`; normalise timestamps to tz-naive and round to seconds for stable CSV parsing.
+- Added per-vessel degree constraints (≤1 incoming/outgoing per job) to eliminate branching artefacts; this removed numeric “overlaps” in the small subset runs once timestamps were stabilised.
+- Added a lightweight evaluator: `Models/evaluate_optimizer_output.py` writes `Visualizations/output/eval_<experiment>.txt` and checks overlaps (with tolerance), missing times, and laycan-window violations; also reports overlap with `fleet_plan_manual.csv` when present.
+- Current evaluation snapshot:
+  * subset_ml_proxy (10 vessels / 30 voyages): Solver Optimal, 30 allocations served, overlaps=0, but many laycan-end violations (expected when forcing full coverage with tight laycans).
+  * manual_match (30 vessels / 62 voyages): CBC often returns status "Not Solved" at the 90s time limit; allocations/schedule from the partial solution are not reliable yet—next step is to reduce arc volume and/or raise time limits so we get an integer incumbent consistently before judging overlap with manual.
+
+[Optimizer update - 2026-01-07 (time-window realism)]
+- Added `hard_laycan_end` option in `Models/optimizer_mip.py` to enforce laycan end as a hard constraint; this allows runs where infeasible voyages remain unserved instead of being scheduled late.
+- When CBC returns status "Not Solved" (time limit), we now build a physically consistent exported schedule by forward-propagating each vessel’s chosen sequence from vessel availability and laycan starts (so overlaps in `schedule_*.csv` no longer indicate solver inconsistency).
+- Added `subset_physical` experiment in `Models/run_optimizer_sample.py` (hard laycan end, lower unserved penalty) to sanity-check feasibility before tuning objectives.
+- Latest evaluation reports:
+  * `Visualizations/output/eval_subset_physical.txt`: 4/30 served, overlaps=0, laycan-end violations=0 (strict feasibility).
+  * `Visualizations/output/eval_subset_ml_proxy.txt`: 30/30 served, overlaps=0, laycan-end violations=29 (coverage-first).
+  * `Visualizations/output/eval_manual_match.txt`: overlaps=0 in exported schedule, but laycan-end violations remain when lateness is allowed; use `hard_laycan_end` and/or retune penalties before comparing to manual.
+
+[Optimizer update - 2026-01-07 (manual experiments + arc selection)]
+- `Models/run_optimizer_sample.py` now supports `--experiment` (run one) and disables the expensive disjunctive non-overlap constraints by default (enable with `--enable-nonoverlap`) to keep runs fast and avoid timeouts.
+- Added job→job arc selection modes in `Models/optimizer_mip.py`: `job_job_selection=time|reposition` with `job_job_candidate_window` to pick successors by reposition distance within a forward time window (used for manual runs).
+- Added `manual_match_physical` (hard laycan end) as a more realistic benchmark against the manual set (feasible subset only).
+- Current snapshot (60s time limit, non-overlap disabled):
+  * `Visualizations/output/eval_manual_match.txt`: 51/62 served but 42 laycan-end violations (lateness allowed).
+  * `Visualizations/output/eval_manual_match_physical.txt`: 47/62 served, 0 laycan-end violations, 23 voyages match manual vessel assignment.
+
+---
+
+Thesis-ready vs Business-ready (Optimizer)
+
+Thesis-ready scope (what we aim to “finish” now)
+ - Goal: a reproducible optimiser prototype that produces physically consistent schedules/actions on the Stena sample scenario and supports thesis evaluation/figures.
+ - What must be true (“good enough” gates):
+   * No per-vessel time overlaps in exported schedules: overlaps=0 in `Visualizations/output/eval_*.txt`.
+   * No missing timestamps in exported schedules: missing_times=0.
+   * For strict-feasibility runs (`hard_laycan_end=True`): laycan start violations=0 and laycan end violations=0.
+   * Demonstrate trade-off: show both a coverage-first run and a strict-feasibility run on the same dataset (e.g. `manual_match` vs `manual_match_physical`) with evaluator outputs saved.
+   * Reproducibility: single-command run instructions in `TextFiles/runGuide.txt` and deterministic outputs committed/archived for thesis reference.
+ - Deliverables to lock for the thesis:
+   * Scripts: `Models/run_optimizer_sample.py`, `Models/evaluate_optimizer_output.py`, `Visualizations/gantt_viz.py`.
+   * Thesis bundle runner: `Models/run_thesis_optimizer_demo.py` (generates both strict and coverage-first artefacts with stable filenames).
+   * Artefacts: `Visualizations/output/allocations_*.csv`, `schedule_*.csv`, `eval_*.txt`, `gantt_sample.png`.
+   * Narrative: short write-up of constraints/objective/assumptions + evaluation metrics (served count, violations, runtime).
+ - Thesis automation: `Models/run_thesis_optimizer_demo.py --require-gates` exits non-zero if the strict run violates the feasibility gates above.
+
+Business-ready scope (explicitly out of scope for thesis MVP)
+ - Real integration: wiring optimiser outputs into the frontend/API workflow (create/move/unallocate + targeted refresh), permissions, audit logging, retries, and user-facing explanations.
+ - Full constraint set: cargo/vessel compatibility, draft/beam restrictions, contractual priorities, open positions, port restrictions, prohibited sequences, multiple resources, and richer availability handling.
+ - Performance guarantees: predictable runtime at production scale (hundreds/thousands of voyages) via stronger pruning, decomposition, warm starts, solver configuration, and fallbacks.
+ - Robust QA: automated tests, regression datasets, CI gating, monitoring/telemetry, and clear failure modes.
+
+Laycan policy note (thesis MVP)
+ - We support two laycan-end policies in the MIP:
+   * Hard laycan end (`hard_laycan_end=True`): start time must be ≤ laycan end when the field is present; infeasible voyages remain unserved.
+   * Soft laycan end (`hard_laycan_end=False`): allow starting after laycan end with a lateness slack and penalty; optionally cap lateness via `max_late_days`.
+ - The sample exports include `ESTIMATED_VOYAGE_START_DATE` in the manual plan, but it is not guaranteed to match cargo laycans one-to-one (and laycans are missing for many sample voyages), so we keep the policy as an explicit toggle for thesis runs rather than trying to infer a single “correct” semantics from the sample.

@@ -102,6 +102,9 @@ class UnallocateVoyage(OptimizerAction):
 class OptimizerResult:
     actions: List[OptimizerAction]
     logs: List[str]
+    schedule: Optional[pd.DataFrame] = None
+    status: Optional[str] = None
+    objective: Optional[float] = None
 
 
 class GreedyOptimizer:
