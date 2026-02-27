@@ -1,0 +1,26 @@
+Checkpoints (thesis write-up)
+
+Purpose
+ - When you start writing thesis chapters that describe implementation/results, log a checkpoint here.
+ - For each checkpoint: record the command used, the output prefix, and the exact eval artefacts you cite.
+
+
+2026-01-23 — “Started writing implementation chapter”
+ - Recommended citation artefacts (baseline at time of writing):
+   - Strict (hard laycan end): `Visualizations/output/eval_thesis_latest_manual_match_physical.txt`
+   - Relaxed (lateness penalised): `Visualizations/output/eval_thesis_latest_manual_match_coverage.txt`
+ - Command used:
+   - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis_latest --skip-gantt`
+ - Notes:
+   - A baseline snapshot of outputs was stored at `Visualizations/output/baseline_2026-01-23_104007/`.
+
+2026-01-23 — “Vessel activation penalty added (toggle)”
+ - Code change:
+   - Added `vessel_used_penalty` objective term (per activated vessel) in `Models/optimizer_mip.py`.
+   - Exposed as CLI knobs in `Models/run_thesis_optimizer_demo.py`:
+     - `--vessel-used-penalty-strict`
+     - `--vessel-used-penalty-coverage`
+ - Example run prefix (strict penalty only):
+   - `Visualizations/output/eval_thesis_latest2_strict_vpen_1e5_manual_match_physical.txt`
+   - `Visualizations/output/eval_thesis_latest2_strict_vpen_1e5_manual_match_coverage.txt`
+

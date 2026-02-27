@@ -1,0 +1,16 @@
+Run: manual_match_coverage
+Status: Optimal
+Objective: 36684092.73662002
+
+Actions: 62
+Vessels used: 29
+Max legs per vessel: 7
+Overlaps (count): 0
+Missing times (start/end): 0
+Laycan start violations: 0
+Laycan end violations (start>laycan_end): 28
+
+Manual overlap:
+  Manual voyages: 62
+  Overlap on voyage id: 62
+  Overlap with same vessel: 30

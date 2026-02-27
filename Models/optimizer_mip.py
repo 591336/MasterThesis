@@ -431,6 +431,7 @@ def solve_mip(
     max_late_days: Optional[float] = None,
     job_job_selection: str = "time",
     job_job_candidate_window: Optional[int] = None,
+    vessel_used_penalty: float = 0.0,
 ) -> OptimizerResult:
     arcs, job_duration_map, time_windows, vessel_available, arc_stats = build_arcs(
         request,
@@ -466,6 +467,7 @@ def solve_mip(
     t_vars: Dict[str, pulp.LpVariable] = {}
     y_vars: Dict[str, pulp.LpVariable] = {}
     late_vars: Dict[str, pulp.LpVariable] = {}
+    used_vars: Dict[str, pulp.LpVariable] = {}
 
     for arc in arcs:
         key = (arc.vessel, arc.i, arc.j)
@@ -476,12 +478,18 @@ def solve_mip(
         y_vars[job] = pulp.LpVariable(f"y_{job}", lowBound=0, upBound=1, cat="Binary")
         late_vars[job] = pulp.LpVariable(f"late_{job}", lowBound=0, cat="Continuous")
 
+    for vessel in vessels:
+        # Keep this continuous: the linking constraints force used_v == start_out (0/1),
+        # without introducing additional binary variables that can slow CBC.
+        used_vars[vessel] = pulp.LpVariable(f"used_{vessel}", lowBound=0, upBound=1, cat="Continuous")
+
     late_penalty = unserved_penalty * float(late_penalty_scale)
 
     prob += (
         pulp.lpSum([arc.cost * x_vars[(arc.vessel, arc.i, arc.j)] for arc in arcs])
         + unserved_penalty * pulp.lpSum([y_vars[j] for j in jobs])
         + (0.0 if hard_laycan_end else late_penalty) * pulp.lpSum([late_vars[j] for j in jobs])
+        + float(vessel_used_penalty) * pulp.lpSum([used_vars[v] for v in vessels])
     )
 
     arc_index_by_dest = defaultdict(list)
@@ -497,8 +505,13 @@ def solve_mip(
     for vessel in vessels:
         start_node = f"O_{vessel}"
         end_node = f"D_{vessel}"
-        prob += pulp.lpSum([x_vars[(vessel, start_node, arc.j)] for arc in arc_index_by_src[(vessel, start_node)]]) <= 1, f"start_{vessel}"
+        start_out = pulp.lpSum([x_vars[(vessel, start_node, arc.j)] for arc in arc_index_by_src[(vessel, start_node)]])
+        prob += start_out <= 1, f"start_{vessel}"
         prob += pulp.lpSum([x_vars[(vessel, arc.i, end_node)] for arc in arc_index_by_dest[(vessel, end_node)]]) <= 1, f"end_{vessel}"
+        # Link "used" variable to whether the vessel is activated (any arc leaves start node).
+        # With start_out <= 1, these constraints force used_v == start_out.
+        prob += used_vars[vessel] >= start_out, f"used_lb_{vessel}"
+        prob += used_vars[vessel] <= start_out, f"used_ub_{vessel}"
 
         for job in jobs:
             incoming = [x_vars[(a.vessel, a.i, a.j)] for a in arc_index_by_dest[(vessel, job)] if a.j == job]

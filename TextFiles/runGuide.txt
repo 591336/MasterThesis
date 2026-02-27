@@ -83,6 +83,8 @@ Optimizer sample + evaluation
 Thesis demo bundle (recommended)
   - Generates the thesis-ready artefacts for the manual set, including a strict-feasibility run and a coverage-first contrast run:
     * `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis`
+    * Optional realism knob: fixed penalty per activated vessel (usually apply to strict run only):
+      - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --vessel-used-penalty-strict 100000`
     * Enforce thesis “good enough” gates (non-zero exit on failure):
       - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --require-gates`
     * Tip: use a date-coded prefix (e.g. `--output-prefix thesis_2026-01-07`) to preserve snapshots.

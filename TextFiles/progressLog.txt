@@ -116,3 +116,14 @@
   - Reworked feature prep to compute port and port×ballast medians on the training fold after splitting to avoid validation leakage.
   - Regenerated Stena splits (`--validation-ratio 0.42`) and refit DecisionTree/HistGradientBoosting baselines; validation MAE now 1.27 d (DT) and 1.18 d (HGBT) vs median baseline 1.30 d, confirming leakage removal but weaker generalisation.
   - Next: explore smoothed train-only priors (count-weighted medians) or target encoding to regain lift without leakage.
+2026-01-23T10:42:00+01:00 - Optimiser evaluation refresh + baseline snapshot
+  - Created a frozen snapshot of existing optimiser artefacts under `Visualizations/output/baseline_2026-01-23_104007/` for comparison.
+  - Re-ran thesis demo bundle (no Gantt) with `--output-prefix thesis_latest`:
+    * Strict (hard laycan end): 51/62 served, overlaps=0, missing_times=0, laycan violations=0, manual vessel matches=32.
+    * Relaxed (lateness penalised): 60/62 served, overlaps=0, missing_times=0, laycan_end violations=29, manual vessel matches=47.
+  - Smoke test: compiled `Models/`, `QA/`, `Visualizations/` via `python -m compileall` (no errors).
+2026-01-23T13:55:00+01:00 - Checkpoint + vessel activation penalty toggle
+  - Checkpoint logged for thesis writing in `TextFiles/checkpoints.txt` (use the `thesis_latest` artefacts as the “started writing” baseline).
+  - Implemented a toggleable “vessel activation penalty” term:
+    * `Models/optimizer_mip.py`: adds `vessel_used_penalty * used_v` (used_v linked to whether any arc leaves the vessel start node).
+    * `Models/run_thesis_optimizer_demo.py`: CLI knobs `--vessel-used-penalty-strict` and `--vessel-used-penalty-coverage` (defaults 0).

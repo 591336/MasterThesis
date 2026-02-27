@@ -36,6 +36,24 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate thesis-ready optimizer artefacts (sample scenario).")
     parser.add_argument("--time-limit-sec", type=int, default=60, help="CBC time limit per run (seconds).")
     parser.add_argument(
+        "--vessel-used-penalty",
+        type=float,
+        default=None,
+        help="Optional fixed penalty per activated vessel (legacy: sets both strict+coverage penalties).",
+    )
+    parser.add_argument(
+        "--vessel-used-penalty-strict",
+        type=float,
+        default=0.0,
+        help="Fixed penalty per activated vessel for the strict run (discourages excessive vessel usage).",
+    )
+    parser.add_argument(
+        "--vessel-used-penalty-coverage",
+        type=float,
+        default=0.0,
+        help="Fixed penalty per activated vessel for the coverage run (use with care; can change the trade-off).",
+    )
+    parser.add_argument(
         "--output-prefix",
         default="thesis",
         help="Prefix used in Visualizations/output filenames (e.g. allocations_<prefix>_manual_match_physical.csv).",
@@ -267,6 +285,12 @@ def main() -> None:
     cfg = DemoConfig(time_limit_sec=int(args.time_limit_sec))
     out_dir = ROOT / "Visualizations" / "output"
 
+    strict_vessel_penalty = float(args.vessel_used_penalty_strict)
+    coverage_vessel_penalty = float(args.vessel_used_penalty_coverage)
+    if args.vessel_used_penalty is not None:
+        strict_vessel_penalty = float(args.vessel_used_penalty)
+        coverage_vessel_penalty = float(args.vessel_used_penalty)
+
     vessels, voyages, fleet_plan, manual = load_sample()
     prep_dates(vessels, voyages)
     add_haversine_miles(voyages)
@@ -292,6 +316,7 @@ def main() -> None:
         job_job_candidate_window=cfg.job_job_candidate_window,
         preferred_vessels=pref,
         switch_penalty=0.5,
+        vessel_used_penalty=strict_vessel_penalty,
     )
     physical_tag = "manual_match_physical"
     physical_outputs = write_outputs(
@@ -319,6 +344,7 @@ def main() -> None:
         job_job_candidate_window=cfg.job_job_candidate_window,
         preferred_vessels=pref,
         switch_penalty=0.5,
+        vessel_used_penalty=coverage_vessel_penalty,
     )
     coverage_tag = "manual_match_coverage"
     coverage_outputs = write_outputs(
@@ -345,6 +371,8 @@ def main() -> None:
         "Contrast (coverage-first):",
         f"  {coverage_outputs['eval']}",
         "",
+        f"Vessel used penalty (strict): {strict_vessel_penalty}",
+        f"Vessel used penalty (coverage): {coverage_vessel_penalty}",
         "Gates:",
         "  strict: overlaps=0, missing_times=0, laycan_start/end violations=0",
         "  coverage-first: overlaps=0, missing_times=0",
@@ -352,7 +380,7 @@ def main() -> None:
         *([f"  - {msg}" for msg in gate_failures] if gate_failures else []),
         "",
         "Commands to reproduce:",
-        f"  uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec {cfg.time_limit_sec} --output-prefix {args.output_prefix}",
+        f"  uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec {cfg.time_limit_sec} --output-prefix {args.output_prefix} --vessel-used-penalty-strict {strict_vessel_penalty} --vessel-used-penalty-coverage {coverage_vessel_penalty}",
         "",
     ]
     summary_path.write_text("\n".join(summary_lines), encoding="utf-8")

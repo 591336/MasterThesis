@@ -1,0 +1,13 @@
+Experiment: subset_physical
+Actions: 4
+Vessels used: 3
+Max legs per vessel: 2
+Overlaps (count): 0
+Missing times (start/end): 0
+Laycan start violations: 0
+Laycan end violations (start>laycan_end): 0
+
+Manual overlap:
+  Manual voyages: 62
+  Overlap on voyage id: 1
+  Overlap with same vessel: 0
