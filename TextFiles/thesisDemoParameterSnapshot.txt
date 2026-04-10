@@ -10,9 +10,12 @@ This file lists the parameter values actually used by the thesis demo runs so Ch
 A) Demo runner defaults (CLI)
  - `--time-limit-sec`: 60
  - `--output-prefix`: "thesis"
+ - `--missing-reposition-days`: 1.0 (fallback reposition time when a port-pair distance is unavailable)
  - `--overlap-tolerance-sec`: 60.0
  - `--require-gates`: false (when true, exits non-zero on strict gate failure)
  - `--skip-gantt`: false
+ - `--min-dest-port-coverage`: 0.90 (minimum acceptable DEST_PORT_ID non-null coverage for the effective optimiser set)
+ - `--require-dest-port-coverage`: false (when true, fail fast before solve if DEST coverage is below threshold)
 
 
 B) MIP + arc construction parameters (shared by BOTH thesis demo runs)
@@ -22,6 +25,7 @@ Passed from `Models/run_thesis_optimizer_demo.py` into `solve_mip(...)`:
  - `window_slack_days`: 3.0
  - `job_job_selection`: "reposition"
  - `job_job_candidate_window`: 30
+ - `missing_reposition_days`: 1.0
  - `preferred_vessels`: voyage→vessel mapping from `fleet_plan_manual.csv` (if present); used only for an optional mismatch penalty.
  - `switch_penalty`: 0.5 (added to an arc’s cost if the selected vessel != preferred vessel for that voyage)
 
@@ -33,6 +37,7 @@ Defaults from `Models/optimizer_mip.py:solve_mip` (not overridden by the demo ru
  - `enforce_nonoverlap`: false (quadratic disjunctive non-overlap constraints are disabled)
  - `min_job_duration_days`: 0.01 (lower bound on per-voyage duration to avoid degeneracy/cycles)
  - `max_late_days`: None (no explicit lateness cap unless provided)
+ - `vessel_used_penalty`: 0.0 (default; optional fixed penalty per activated vessel)
 
 
 C) Laycan policy parameters (differs between the two demo runs)
@@ -73,4 +78,3 @@ The MIP is a minimisation problem with three top-level components:
 E) Reproducibility note (what the thesis demo fixes)
  - `OptimizerRequest.seed`: 42 (currently unused by the MIP solver but kept for reproducibility across methods)
  - Output artefacts are written with stable names: `Visualizations/output/{allocations|schedule|eval}_<prefix>_<tag>.*`
-

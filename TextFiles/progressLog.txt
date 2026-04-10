@@ -127,3 +127,82 @@
   - Implemented a toggleable “vessel activation penalty” term:
     * `Models/optimizer_mip.py`: adds `vessel_used_penalty * used_v` (used_v linked to whether any arc leaves the vessel start node).
     * `Models/run_thesis_optimizer_demo.py`: CLI knobs `--vessel-used-penalty-strict` and `--vessel-used-penalty-coverage` (defaults 0).
+2026-01-23T14:35:00+01:00 - Conservative reposition fallback for missing port-pair distances
+  - Implemented `missing_reposition_days` in `Models/optimizer_mip.py` (default 1.0 day): when pairwise distance is unavailable, arc time now uses this fallback instead of 0.0.
+  - Added missing-reposition diagnostics in MIP logs (`missing_reposition_start`, `missing_reposition_job_job`) to quantify data coverage impact.
+  - Exposed CLI knob in thesis runner: `Models/run_thesis_optimizer_demo.py --missing-reposition-days <float>`; run guide and parameter snapshot updated.
+  - Snapshot runs:
+    * `thesis_fallback1` (default 1.0 day)
+    * `thesis_fallback05` (sensitivity at 0.5 day)
+2026-01-23T14:48:00+01:00 - Thesis stability lock (reposition fallback)
+  - Decision fixed for thesis runs:
+    * Main strict baseline uses `missing_reposition_days=1.0`.
+    * Sensitivity variant uses `missing_reposition_days=0.5`.
+  - Stability requirement: no further fallback-policy changes unless a critical correctness issue is discovered.
+2026-02-27T11:40:00+01:00 - Port-ID export robustness + fail-fast coverage gate
+  - Updated export template `DataSets/Raw/General/sqls_for_optimizer_economics.txt`:
+    * Voyage ORIGIN/DEST now derived from `TBL_PORT_CALL` + `TBL_REASON_FOR_CALL` (`L`/`D`, first sequence) with fallback to voyage fields.
+    * Keeps one row per voyage via `SELECT DISTINCT VOYAGE_ID` in scenario CTE.
+  - Added preflight diagnostics in `Models/run_thesis_optimizer_demo.py`:
+    * Reports ORIGIN/DEST non-null and mapped coverage for full input and effective optimiser set.
+    * New flags: `--min-dest-port-coverage` (default 0.90), `--require-dest-port-coverage`.
+  - Validation runs:
+    * `thesis_destcovcheck`: summary includes port coverage diagnostics.
+    * `thesis_destcovcheck_gate`: fails fast correctly when effective DEST coverage is below threshold.
+  - Current local file state (after user-side export attempt) still reads old sample extract:
+    * `unallocated_voyages_detailed.csv` has 324 rows with `DEST_PORT_ID` coverage 0%.
+    * Effective optimiser set (manual subset, 62 rows) also has `DEST_PORT_ID` coverage 0%.
+2026-02-27T13:40:00+01:00 - New voyage export ingested; manual benchmark mismatch detected
+  - Confirmed new export file is now in place:
+    * `unallocated_voyages_detailed.csv`: 2,015 rows, `DEST_PORT_ID` non-null 95.5%.
+  - Critical consistency finding:
+    * `fleet_plan_manual.csv` (62 voyage IDs) has zero overlap with the new candidate-voyage file (2,015 voyage IDs).
+    * Effective optimiser set for thesis demo therefore becomes empty after manual filtering.
+  - Reliability fixes in `Models/run_thesis_optimizer_demo.py`:
+    * `write_outputs()` now handles empty schedules safely (no crash on empty CSV parse).
+    * Added fail-fast error when manual-voyage overlap is zero, with counts in the message.
+  - Next required action:
+    * Export candidate voyages from the same scenario/fleet-plan lineage as `fleet_plan_manual.csv`, or refresh the manual file to match the new scenario.
+2026-02-27T13:50:00+01:00 - SampleScenario files re-aligned and thesis demo rerun
+  - User refreshed all three files consistently for `FLEET_PLAN_ID=1013798`:
+    * `fleet_plan_voyages.csv`: 116 rows
+    * `fleet_plan_manual.csv`: 116 rows
+    * `unallocated_voyages_detailed.csv`: 116 rows (DEST coverage 96.6%)
+  - Consistency checks now pass:
+    * `VOYAGE_ID` overlap manual↔fleet-plan↔candidates = 116/116.
+    * Effective optimiser set no longer empty.
+  - Thesis demo rerun with destination coverage gate:
+    * Command: `uv run python Models/run_thesis_optimizer_demo.py --output-prefix thesis_aligned116 --skip-gantt --time-limit-sec 60 --require-dest-port-coverage`
+    * Coverage gate: PASS (96.6% >= 90.0%).
+    * Strict: 115 actions, overlaps=0, missing_times=0, laycan violations=0.
+    * Coverage-first: 115 actions, overlaps=0, missing_times=0, laycan_end violations=50 (expected for relaxed end).
+2026-03-23T08:43:00+01:00 - Chapter 5 manifest + aligned fallback sensitivity run
+  - Executed aligned sensitivity demo:
+    * `uv run python Models/run_thesis_optimizer_demo.py --output-prefix thesis_aligned116_fallback05 --skip-gantt --time-limit-sec 60 --require-dest-port-coverage --missing-reposition-days 0.5`
+    * Coverage gate: PASS (96.6% >= 90.0%).
+    * Strict: 115 actions, overlaps=0, missing_times=0, laycan violations=0.
+    * Coverage-first: 116 actions, overlaps=0, missing_times=0, laycan_end violations=54.
+  - Added `TextFiles/thesis_results_manifest.txt` to list Chapter 5 intended runs, grouped by:
+    * predictive-model evaluation
+    * main optimisation baseline
+    * sensitivity analysis
+2026-03-23T09:05:00+01:00 - Predictive evaluation summary (Chapter 5)
+  - Added `TextFiles/predictive_eval_summary.txt` with:
+    * Port-turnaround model variants (DT, HGBT) + split metadata + MAE/RMSE.
+    * Sailing-time model variants (DT, DT no-season) + split metadata + MAE/RMSE.
+    * Explicit marker of models used in optimiser baseline (`port_turnaround_dt.joblib`, `sailing_time_dt.joblib`).
+  - Included mean residual (bias) and lookup-baseline MAE/RMSE by code-generating predictions from saved artifacts/lookups on saved train/validation parquet splits.
+2026-03-23T09:15:00+01:00 - Optimisation baseline summary (Chapter 5)
+  - Added `TextFiles/optimization_baseline_summary.txt` for the final strict baseline run:
+    * run_id `thesis_aligned116_strict`
+    * strict laycan, `missing_reposition_days=1.0`
+    * selected models: `port_turnaround_dt.joblib`, `sailing_time_dt.joblib`
+    * includes actions/served/unserved, violations, objective, and exact result files.
+  - Marked `missing_reposition_start` / `missing_reposition_job_job` as `not available` because these counts are not persisted in saved output files for the baseline run.
+2026-03-23T09:25:00+01:00 - Optimisation sensitivity summary (Chapter 5)
+  - Added `TextFiles/optimization_sensitivity_summary.txt`.
+  - Included aligned sensitivity run set with baseline-relative fields:
+    * `thesis_aligned116_relaxed`
+    * `thesis_aligned116_fallback05_strict`
+    * `thesis_aligned116_fallback05_relaxed`
+  - Added explicit comparison subsection vs baseline (`thesis_aligned116_strict`) listing only factual metric differences from saved outputs.

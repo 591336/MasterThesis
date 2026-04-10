@@ -92,6 +92,12 @@ def parse_args() -> argparse.Namespace:
         help="If using soft laycan end, set penalty scale relative to unserved_penalty (default 0.001).",
     )
     parser.add_argument(
+        "--missing-reposition-days",
+        type=float,
+        default=1.0,
+        help="Fallback reposition time (days) when pairwise port distance is unavailable.",
+    )
+    parser.add_argument(
         "--enable-nonoverlap",
         action="store_true",
         help="Enable expensive disjunctive non-overlap constraints for manual experiments.",
@@ -276,6 +282,7 @@ def main() -> None:
             ),
             switch_penalty=(0.5 if exp["name"] in {"manual_match", "manual_match_physical"} else 0.0),
             time_weight=0.1,
+            missing_reposition_days=float(args.missing_reposition_days),
         )
 
         print(f"\n=== Experiment: {exp['name']} ===")

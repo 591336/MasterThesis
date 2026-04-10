@@ -7,13 +7,18 @@ Purpose
 
 1) Reposition “teleportation” risk (port-coordinate coverage)
  - The optimiser approximates reposition time using port IDs + `ports_latlon.csv` (haversine nautical miles, default speed).
- - If port coordinates are missing or port IDs do not match entries in `DataSets/Derived/Stena/Static/ports_latlon.csv`,
-   reposition time can fall back to 0.0 in some cases.
- - Consequence: the model may allow unrealistic instantaneous moves between ports (“teleportation”), inflating feasibility
-   and potentially over-serving voyages.
+ - Current implementation uses a configurable conservative fallback when the pairwise distance is unavailable:
+   `missing_reposition_days` (default 1.0 day in thesis demo runner).
+ - Historical note: older runs used 0.0 fallback in some cases, which could allow unrealistic instantaneous moves.
+ - Consequence: with conservative fallback, unknown-port arcs can become much harder to schedule (especially if many pairs
+   are missing), reducing served voyages but improving realism.
  - Mitigation options (future work):
-   - Improve port mapping coverage/ID harmonisation; fail closed for missing ports (drop arcs) or apply conservative defaults.
+   - Improve port mapping coverage/ID harmonisation; optionally fail closed for missing ports (drop arcs).
    - Add QA report: % of arcs using real distances vs fallback, and list missing port IDs.
+   - Calibrate `missing_reposition_days` with domain feedback (e.g., typical minimum ballast transit time).
+ - Current safeguard:
+   - `Models/run_thesis_optimizer_demo.py` now includes a DEST coverage preflight and optional fail-fast gate:
+     `--require-dest-port-coverage --min-dest-port-coverage 0.90`.
 
 
 2) Location granularity (port-level only)
@@ -48,4 +53,3 @@ Purpose
 7) Model prediction uncertainty not represented
  - Sailing time and turnaround predictors are point estimates; optimiser treats them as deterministic durations.
  - Consequence: schedules can be brittle under forecast error; no buffers/robust optimisation currently included.
-

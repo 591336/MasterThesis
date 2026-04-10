@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,9 +33,20 @@ class DemoConfig:
     late_penalty_scale: float = 0.001
 
 
+_MISSING_REPOSITION_PATTERN = re.compile(
+    r"missing_reposition_start=(?P<start>\d+)\s+missing_reposition_job_job=(?P<job_job>\d+)"
+)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Generate thesis-ready optimizer artefacts (sample scenario).")
     parser.add_argument("--time-limit-sec", type=int, default=60, help="CBC time limit per run (seconds).")
+    parser.add_argument(
+        "--missing-reposition-days",
+        type=float,
+        default=1.0,
+        help="Conservative fallback reposition time (days) when port pair distance is unavailable.",
+    )
     parser.add_argument(
         "--vessel-used-penalty",
         type=float,
@@ -73,6 +85,17 @@ def parse_args() -> argparse.Namespace:
         "--skip-gantt",
         action="store_true",
         help="Skip generating Gantt PNGs from the exported schedules.",
+    )
+    parser.add_argument(
+        "--min-dest-port-coverage",
+        type=float,
+        default=0.90,
+        help="Minimum acceptable DEST_PORT_ID non-null coverage (0-1) for the effective voyage set.",
+    )
+    parser.add_argument(
+        "--require-dest-port-coverage",
+        action="store_true",
+        help="Fail fast when effective DEST_PORT_ID coverage is below --min-dest-port-coverage.",
     )
     return parser.parse_args()
 
@@ -137,6 +160,55 @@ def add_haversine_miles(voyages: pd.DataFrame) -> None:
         voyages["MILES_DIRECT"] = voyages["MILES_DIRECT"].fillna(voyages["HV_DISTANCE_NM"])
     else:
         voyages["MILES_DIRECT"] = voyages["HV_DISTANCE_NM"]
+
+
+def summarize_port_coverage(voyages: pd.DataFrame) -> dict:
+    n_rows = int(len(voyages))
+    if n_rows == 0:
+        return {
+            "rows": 0,
+            "origin_nonnull": 0,
+            "origin_nonnull_pct": 0.0,
+            "dest_nonnull": 0,
+            "dest_nonnull_pct": 0.0,
+            "origin_mapped": None,
+            "origin_mapped_pct_rows": None,
+            "dest_mapped": None,
+            "dest_mapped_pct_rows": None,
+        }
+
+    origin = pd.to_numeric(voyages.get("ORIGIN_PORT_ID"), errors="coerce")
+    dest = pd.to_numeric(voyages.get("DEST_PORT_ID"), errors="coerce")
+    origin_nonnull = int(origin.notna().sum())
+    dest_nonnull = int(dest.notna().sum())
+
+    summary = {
+        "rows": n_rows,
+        "origin_nonnull": origin_nonnull,
+        "origin_nonnull_pct": float(origin_nonnull / n_rows),
+        "dest_nonnull": dest_nonnull,
+        "dest_nonnull_pct": float(dest_nonnull / n_rows),
+        "origin_mapped": None,
+        "origin_mapped_pct_rows": None,
+        "dest_mapped": None,
+        "dest_mapped_pct_rows": None,
+    }
+
+    ports_path = ROOT / "DataSets" / "Derived" / "Stena" / "Static" / "ports_latlon.csv"
+    if not ports_path.exists():
+        return summary
+    ports = pd.read_csv(ports_path)
+    if ports.empty or "PORT_ID" not in ports.columns:
+        return summary
+
+    port_ids = set(pd.to_numeric(ports["PORT_ID"], errors="coerce").dropna().astype(int).tolist())
+    origin_mapped = int(origin.dropna().astype(int).isin(port_ids).sum())
+    dest_mapped = int(dest.dropna().astype(int).isin(port_ids).sum())
+    summary["origin_mapped"] = origin_mapped
+    summary["origin_mapped_pct_rows"] = float(origin_mapped / n_rows)
+    summary["dest_mapped"] = dest_mapped
+    summary["dest_mapped_pct_rows"] = float(dest_mapped / n_rows)
+    return summary
 
 
 def load_adapters() -> ModelAdapters:
@@ -213,12 +285,27 @@ def write_outputs(
     )
     allocations_df.to_csv(allocations_path, index=False)
     if result.schedule is not None and not result.schedule.empty:
-        result.schedule.to_csv(schedule_path, index=False)
+        schedule_df = result.schedule.copy()
     else:
-        pd.DataFrame().to_csv(schedule_path, index=False)
+        schedule_df = pd.DataFrame(
+            columns=["fleet_plan_key", "vessel_key", "voyage_key", "start", "end", "laycan_start", "laycan_end"]
+        )
+    schedule_df.to_csv(schedule_path, index=False)
 
-    sched_stats = check_schedule(pd.read_csv(schedule_path), overlap_tolerance_sec=float(overlap_tolerance_sec))
+    sched_stats = check_schedule(schedule_df, overlap_tolerance_sec=float(overlap_tolerance_sec))
     manual_stats = manual_overlap(allocations_df, manual)
+    reposition_diag = extract_reposition_diagnostics(result)
+
+    start_missing_txt = (
+        str(reposition_diag["start_missing_reposition"])
+        if reposition_diag["start_missing_reposition"] is not None
+        else "not available"
+    )
+    job_job_missing_txt = (
+        str(reposition_diag["job_job_missing_reposition"])
+        if reposition_diag["job_job_missing_reposition"] is not None
+        else "not available"
+    )
 
     lines = [
         f"Run: {tag}",
@@ -232,6 +319,8 @@ def write_outputs(
         f"Missing times (start/end): {sched_stats['missing_times']}",
         f"Laycan start violations: {sched_stats['laycan_start_violations']}",
         f"Laycan end violations (start>laycan_end): {sched_stats['laycan_end_violations']}",
+        f"Missing reposition arcs (start): {start_missing_txt}",
+        f"Missing reposition arcs (job_job): {job_job_missing_txt}",
         "",
         "Manual overlap:",
         f"  Manual voyages: {manual_stats['manual_total']}",
@@ -246,7 +335,20 @@ def write_outputs(
         "eval": str(eval_path),
         "sched_stats": sched_stats,
         "manual_stats": manual_stats,
+        "reposition_diag": reposition_diag,
     }
+
+
+def extract_reposition_diagnostics(result) -> dict[str, int | None]:
+    logs = list(getattr(result, "logs", []) or [])
+    for line in logs:
+        match = _MISSING_REPOSITION_PATTERN.search(str(line))
+        if match:
+            return {
+                "start_missing_reposition": int(match.group("start")),
+                "job_job_missing_reposition": int(match.group("job_job")),
+            }
+    return {"start_missing_reposition": None, "job_job_missing_reposition": None}
 
 
 def check_gates(tag: str, stats: dict, strict: bool) -> list[str]:
@@ -296,6 +398,23 @@ def main() -> None:
     add_haversine_miles(voyages)
     adapters = load_adapters()
     request = build_request(vessels, voyages, fleet_plan, manual)
+    if manual is not None and not manual.empty and request.unallocated_voyages.empty:
+        manual_n = int(manual["VOYAGE_ID"].astype("string").nunique())
+        candidate_n = int(voyages["VOYAGE_ID"].astype("string").nunique())
+        raise SystemExit(
+            "Manual benchmark mismatch: zero voyage-id overlap between "
+            f"fleet_plan_manual.csv (n={manual_n}) and unallocated_voyages_detailed.csv (n={candidate_n}). "
+            "Export voyages for the matching scenario/fleet-plan before running thesis demo."
+        )
+    full_cov = summarize_port_coverage(voyages)
+    eff_cov = summarize_port_coverage(request.unallocated_voyages)
+    min_dest_cov = float(max(0.0, min(1.0, args.min_dest_port_coverage)))
+    if args.require_dest_port_coverage and eff_cov["dest_nonnull_pct"] < min_dest_cov:
+        raise SystemExit(
+            "DEST_PORT_ID coverage gate failed: "
+            f"effective coverage={eff_cov['dest_nonnull_pct']:.1%} < required={min_dest_cov:.1%}. "
+            "Refresh unallocated_voyages_detailed.csv before running."
+        )
 
     pref = (
         dict(zip(manual["VOYAGE_ID"].astype(str), manual["VESSEL_ID"].astype(str)))
@@ -317,6 +436,7 @@ def main() -> None:
         preferred_vessels=pref,
         switch_penalty=0.5,
         vessel_used_penalty=strict_vessel_penalty,
+        missing_reposition_days=float(args.missing_reposition_days),
     )
     physical_tag = "manual_match_physical"
     physical_outputs = write_outputs(
@@ -345,6 +465,7 @@ def main() -> None:
         preferred_vessels=pref,
         switch_penalty=0.5,
         vessel_used_penalty=coverage_vessel_penalty,
+        missing_reposition_days=float(args.missing_reposition_days),
     )
     coverage_tag = "manual_match_coverage"
     coverage_outputs = write_outputs(
@@ -363,14 +484,76 @@ def main() -> None:
     gate_failures.extend(check_gates(coverage_tag, coverage_outputs["sched_stats"], strict=False))
 
     summary_path = out_dir / f"{args.output_prefix}_demo_summary.txt"
+    strict_diag = physical_outputs.get("reposition_diag", {})
+    coverage_diag = coverage_outputs.get("reposition_diag", {})
+
+    strict_start_txt = (
+        str(strict_diag.get("start_missing_reposition"))
+        if strict_diag.get("start_missing_reposition") is not None
+        else "not available"
+    )
+    strict_job_job_txt = (
+        str(strict_diag.get("job_job_missing_reposition"))
+        if strict_diag.get("job_job_missing_reposition") is not None
+        else "not available"
+    )
+    coverage_start_txt = (
+        str(coverage_diag.get("start_missing_reposition"))
+        if coverage_diag.get("start_missing_reposition") is not None
+        else "not available"
+    )
+    coverage_job_job_txt = (
+        str(coverage_diag.get("job_job_missing_reposition"))
+        if coverage_diag.get("job_job_missing_reposition") is not None
+        else "not available"
+    )
+
     summary_lines = [
         f"Thesis demo summary ({args.output_prefix})",
+        "",
+        "Port ID coverage (full input):",
+        f"  rows: {full_cov['rows']}",
+        f"  ORIGIN_PORT_ID non-null: {full_cov['origin_nonnull']}/{full_cov['rows']} ({full_cov['origin_nonnull_pct']:.1%})",
+        f"  DEST_PORT_ID non-null: {full_cov['dest_nonnull']}/{full_cov['rows']} ({full_cov['dest_nonnull_pct']:.1%})",
+        *(
+            [
+                f"  ORIGIN_PORT_ID mapped rows: {full_cov['origin_mapped']}/{full_cov['rows']} ({full_cov['origin_mapped_pct_rows']:.1%})",
+                f"  DEST_PORT_ID mapped rows: {full_cov['dest_mapped']}/{full_cov['rows']} ({full_cov['dest_mapped_pct_rows']:.1%})",
+            ]
+            if full_cov["origin_mapped"] is not None
+            else []
+        ),
+        "",
+        "Port ID coverage (effective optimiser set):",
+        f"  rows: {eff_cov['rows']}",
+        f"  ORIGIN_PORT_ID non-null: {eff_cov['origin_nonnull']}/{eff_cov['rows']} ({eff_cov['origin_nonnull_pct']:.1%})",
+        f"  DEST_PORT_ID non-null: {eff_cov['dest_nonnull']}/{eff_cov['rows']} ({eff_cov['dest_nonnull_pct']:.1%})",
+        *(
+            [
+                f"  ORIGIN_PORT_ID mapped rows: {eff_cov['origin_mapped']}/{eff_cov['rows']} ({eff_cov['origin_mapped_pct_rows']:.1%})",
+                f"  DEST_PORT_ID mapped rows: {eff_cov['dest_mapped']}/{eff_cov['rows']} ({eff_cov['dest_mapped_pct_rows']:.1%})",
+            ]
+            if eff_cov["origin_mapped"] is not None
+            else []
+        ),
+        (
+            f"  DEST coverage gate: FAIL ({eff_cov['dest_nonnull_pct']:.1%} < {min_dest_cov:.1%})"
+            if eff_cov["dest_nonnull_pct"] < min_dest_cov
+            else f"  DEST coverage gate: PASS ({eff_cov['dest_nonnull_pct']:.1%} >= {min_dest_cov:.1%})"
+        ),
         "",
         "Headline (strict):",
         f"  {physical_outputs['eval']}",
         "Contrast (coverage-first):",
         f"  {coverage_outputs['eval']}",
+        "Objective framing:",
+        "  simplified economic proxy objective (not a full calibrated commercial P&L)",
+        "Missing reposition diagnostics (strict):",
+        f"  start_missing_reposition={strict_start_txt}, job_job_missing_reposition={strict_job_job_txt}",
+        "Missing reposition diagnostics (coverage-first):",
+        f"  start_missing_reposition={coverage_start_txt}, job_job_missing_reposition={coverage_job_job_txt}",
         "",
+        f"Missing reposition fallback (days): {float(args.missing_reposition_days)}",
         f"Vessel used penalty (strict): {strict_vessel_penalty}",
         f"Vessel used penalty (coverage): {coverage_vessel_penalty}",
         "Gates:",
@@ -380,7 +563,7 @@ def main() -> None:
         *([f"  - {msg}" for msg in gate_failures] if gate_failures else []),
         "",
         "Commands to reproduce:",
-        f"  uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec {cfg.time_limit_sec} --output-prefix {args.output_prefix} --vessel-used-penalty-strict {strict_vessel_penalty} --vessel-used-penalty-coverage {coverage_vessel_penalty}",
+        f"  uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec {cfg.time_limit_sec} --output-prefix {args.output_prefix} --missing-reposition-days {float(args.missing_reposition_days)} --vessel-used-penalty-strict {strict_vessel_penalty} --vessel-used-penalty-coverage {coverage_vessel_penalty}",
         "",
     ]
     summary_path.write_text("\n".join(summary_lines), encoding="utf-8")

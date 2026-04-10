@@ -92,6 +92,7 @@ def build_arcs(
     min_job_duration_days: float = 0.01,
     job_job_selection: str = "time",
     job_job_candidate_window: Optional[int] = None,
+    missing_reposition_days: float = 1.0,
 ) -> tuple[
     List[ArcData],
     Dict[str, float],
@@ -101,6 +102,7 @@ def build_arcs(
 ]:
     vessels = request.vessels.copy()
     voyages = request.unallocated_voyages.copy()
+    missing_reposition_days = float(max(0.0, missing_reposition_days))
 
     col_vessel = request.column_hints.vessel_key
     col_voyage = request.column_hints.voyage_key
@@ -254,6 +256,8 @@ def build_arcs(
         "job_job_arcs": 0,
         "start_arcs_late": 0,
         "job_job_arcs_late": 0,
+        "start_missing_reposition": 0,
+        "job_job_missing_reposition": 0,
     }
     for vessel_key in vessel_keys:
         start_node = f"O_{vessel_key}"
@@ -269,7 +273,8 @@ def build_arcs(
             origin = row.get(col_origin_port)
             reposition = sail_time_pair(open_port, origin) if open_port is not None else None
             if reposition is None:
-                reposition = 0.0
+                reposition = missing_reposition_days
+                arc_stats["start_missing_reposition"] += 1
             revenue = pd.to_numeric(row.get("FREIGHT"), errors="coerce")
             gross_freight = pd.to_numeric(row.get("GROSS_FREIGHT"), errors="coerce")
             net_freight = pd.to_numeric(row.get("NET_FREIGHT"), errors="coerce")
@@ -349,7 +354,8 @@ def build_arcs(
                 dest_i = row_i.get(col_dest_port)
                 pair_sail = sail_time_pair(dest_i, origin_j)
                 if pair_sail is None:
-                    pair_sail = 0.0
+                    pair_sail = missing_reposition_days
+                    arc_stats["job_job_missing_reposition"] += 1
                 reposition = float(pair_sail)
                 dur_i = job_duration_map.get(i, min_job_duration_days)
                 revenue = pd.to_numeric(row_j.get("FREIGHT"), errors="coerce")
@@ -432,6 +438,7 @@ def solve_mip(
     job_job_selection: str = "time",
     job_job_candidate_window: Optional[int] = None,
     vessel_used_penalty: float = 0.0,
+    missing_reposition_days: float = 1.0,
 ) -> OptimizerResult:
     arcs, job_duration_map, time_windows, vessel_available, arc_stats = build_arcs(
         request,
@@ -447,6 +454,7 @@ def solve_mip(
         min_job_duration_days=min_job_duration_days,
         job_job_selection=job_job_selection,
         job_job_candidate_window=job_job_candidate_window,
+        missing_reposition_days=missing_reposition_days,
     )
     logs: List[str] = []
     actions: List[OptimizerAction] = []
@@ -456,7 +464,9 @@ def solve_mip(
         return OptimizerResult(actions=actions, logs=logs)
     logs.append(
         f"Arcs total={len(arcs)}, start={arc_stats['start_arcs']} late_start={arc_stats['start_arcs_late']}, "
-        f"job_job={arc_stats['job_job_arcs']} late_job_job={arc_stats['job_job_arcs_late']}"
+        f"job_job={arc_stats['job_job_arcs']} late_job_job={arc_stats['job_job_arcs_late']}, "
+        f"missing_reposition_start={arc_stats['start_missing_reposition']} "
+        f"missing_reposition_job_job={arc_stats['job_job_missing_reposition']}"
     )
 
     jobs = set(job_duration_map.keys())

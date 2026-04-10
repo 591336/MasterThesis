@@ -67,6 +67,9 @@ Optimizer sample + evaluation
       - Hard laycan end (strict feasibility): `--laycan-end hard`
       - Soft laycan end (penalized lateness): `--laycan-end soft --late-penalty-scale 0.001`
       - Soft + cap lateness (recommended if not hard): `--laycan-end soft --max-late-days 2`
+    * Reposition fallback (when pairwise port distance is unavailable):
+      - `--missing-reposition-days 1.0` (default conservative fallback)
+      - `--missing-reposition-days 0.5` (less conservative sensitivity run)
     * Outputs:
       - `Visualizations/output/allocations_<experiment>.csv`
       - `Visualizations/output/schedule_<experiment>.csv`
@@ -83,8 +86,16 @@ Optimizer sample + evaluation
 Thesis demo bundle (recommended)
   - Generates the thesis-ready artefacts for the manual set, including a strict-feasibility run and a coverage-first contrast run:
     * `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis`
+    * Important: `fleet_plan_manual.csv` and `unallocated_voyages_detailed.csv` must refer to the same scenario/voyage universe.
+      - If voyage-id overlap is zero, the runner now exits with a clear mismatch error.
+    * Reposition fallback (when port-pair distance is unavailable):
+      - default conservative fallback: `--missing-reposition-days 1.0`
+      - example override: `--missing-reposition-days 0.5`
     * Optional realism knob: fixed penalty per activated vessel (usually apply to strict run only):
       - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --vessel-used-penalty-strict 100000`
+    * Port-ID quality guardrail (recommended before citing results):
+      - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --require-dest-port-coverage --min-dest-port-coverage 0.90`
+      - This fails fast if `DEST_PORT_ID` coverage in the effective optimiser set is too low.
     * Enforce thesis “good enough” gates (non-zero exit on failure):
       - `uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec 60 --output-prefix thesis --require-gates`
     * Tip: use a date-coded prefix (e.g. `--output-prefix thesis_2026-01-07`) to preserve snapshots.
