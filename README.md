@@ -28,20 +28,33 @@ Fleet allocation AI repo for master thesis 2025/26
 If PowerShell blocks the install script, run PowerShell as Administrator once and execute `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
 
 ## Common tasks
-- `uv run python -m pytest`
+- `uv run pytest` (project is configured for a `tests/` folder; this may currently report no tests collected)
 - `uv run ruff check .`
-- `uv run python main.py`
+- `uv run python main.py` (sanity check; currently prints a placeholder message)
 - `uv run black .` (format)
 
 ## Data / models
-- `DataSets/` and `Models/` are git-ignored stash directories for local assets
-- Keep raw data out of version control unless explicitly scrubbed
+- Only `*.txt` files are ignored by the current `.gitignore`
+- `DataSets/` and `Models/` contain local data/model assets, but they are not globally git-ignored
+- Keep raw data out of version control unless explicitly scrubbed or intentionally anonymised
 - Customer-aware pipelines (`customer2` by default):
   - `uv run python Models/build_port_turnaround_dataset.py [--customer customer1]`
   - `uv run python QA/port_turnaround_dataset_qa.py [--customer customer1]`
   - `uv run python Models/port_turnaround_lookup.py [--customer customer1]`
   - `uv run python QA/port_turnaround_lookup_qa.py [--customer customer1]`
+  - `uv run python Models/build_sailing_time_dataset.py [--customer customer1]`
+  - `uv run python QA/sailing_time_dataset_qa.py [--customer customer1]`
+  - `uv run python Models/sailing_time_lookup.py [--customer customer1]`
+  - `uv run python Models/fit_port_turnaround_model.py [--customer customer1]`
+  - `uv run python Models/fit_sailing_time_model.py [--customer customer1]`
   - Use `--list-customers` with any command to see available identifiers and their directory layout.
+
+## Thesis demo
+- The locked thesis demo scenario is currently the anonymised `customer1` sample bundle under `DataSets/Derived/Customer1/SampleScenario`
+- Reproduce the thesis-style optimiser run with:
+  - `uv run python Models/run_thesis_optimizer_demo.py --skip-gantt`
+- Run the sample optimiser entry point with:
+  - `uv run python Models/run_optimizer_sample.py`
 
 ## Tips
 - `uv sync --locked` reads the existing `uv.lock` to keep dependency resolution deterministic
