@@ -97,6 +97,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Fail fast when effective DEST_PORT_ID coverage is below --min-dest-port-coverage.",
     )
+    parser.add_argument(
+        "--turnaround-model",
+        choices=("dt", "hgbt"),
+        default="dt",
+        help="Turnaround model artifact to use for the optimisation runs.",
+    )
+    parser.add_argument(
+        "--sailing-model",
+        choices=("dt",),
+        default="dt",
+        help="Sailing-time model artifact to use for the optimisation runs.",
+    )
     return parser.parse_args()
 
 
@@ -211,11 +223,15 @@ def summarize_port_coverage(voyages: pd.DataFrame) -> dict:
     return summary
 
 
-def load_adapters() -> ModelAdapters:
+def load_adapters(turnaround_model: str = "dt", sailing_model: str = "dt") -> ModelAdapters:
     sailing_meta = json.loads((ROOT / "DataSets" / "Derived" / "Stena" / "ML" / "sailing_time_features.json").read_text())
     turnaround_meta = json.loads((ROOT / "DataSets" / "Derived" / "Stena" / "ML" / "port_turnaround_features.json").read_text())
-    sailing_artifact = ROOT / "Models" / "Artifacts" / "stena" / "sailing_time_dt.joblib"
-    turnaround_artifact = ROOT / "Models" / "Artifacts" / "stena" / "port_turnaround_dt.joblib"
+    sailing_artifact = ROOT / "Models" / "Artifacts" / "stena" / f"sailing_time_{sailing_model}.joblib"
+    turnaround_artifact = ROOT / "Models" / "Artifacts" / "stena" / f"port_turnaround_{turnaround_model}.joblib"
+    if not sailing_artifact.exists():
+        raise FileNotFoundError(f"Missing sailing artifact: {sailing_artifact}")
+    if not turnaround_artifact.exists():
+        raise FileNotFoundError(f"Missing turnaround artifact: {turnaround_artifact}")
     return ModelAdapters(
         turnaround=TurnaroundModelAdapter(turnaround_artifact, turnaround_meta),
         sailing_time=SailingTimeModelAdapter(sailing_artifact, sailing_meta),
@@ -396,7 +412,7 @@ def main() -> None:
     vessels, voyages, fleet_plan, manual = load_sample()
     prep_dates(vessels, voyages)
     add_haversine_miles(voyages)
-    adapters = load_adapters()
+    adapters = load_adapters(turnaround_model=args.turnaround_model, sailing_model=args.sailing_model)
     request = build_request(vessels, voyages, fleet_plan, manual)
     if manual is not None and not manual.empty and request.unallocated_voyages.empty:
         manual_n = int(manual["VOYAGE_ID"].astype("string").nunique())
@@ -548,6 +564,9 @@ def main() -> None:
         f"  {coverage_outputs['eval']}",
         "Objective framing:",
         "  simplified economic proxy objective (not a full calibrated commercial P&L)",
+        "Model artifacts:",
+        f"  turnaround: Models/Artifacts/stena/port_turnaround_{args.turnaround_model}.joblib",
+        f"  sailing_time: Models/Artifacts/stena/sailing_time_{args.sailing_model}.joblib",
         "Missing reposition diagnostics (strict):",
         f"  start_missing_reposition={strict_start_txt}, job_job_missing_reposition={strict_job_job_txt}",
         "Missing reposition diagnostics (coverage-first):",
@@ -563,7 +582,7 @@ def main() -> None:
         *([f"  - {msg}" for msg in gate_failures] if gate_failures else []),
         "",
         "Commands to reproduce:",
-        f"  uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec {cfg.time_limit_sec} --output-prefix {args.output_prefix} --missing-reposition-days {float(args.missing_reposition_days)} --vessel-used-penalty-strict {strict_vessel_penalty} --vessel-used-penalty-coverage {coverage_vessel_penalty}",
+        f"  uv run python Models/run_thesis_optimizer_demo.py --time-limit-sec {cfg.time_limit_sec} --output-prefix {args.output_prefix} --missing-reposition-days {float(args.missing_reposition_days)} --vessel-used-penalty-strict {strict_vessel_penalty} --vessel-used-penalty-coverage {coverage_vessel_penalty} --turnaround-model {args.turnaround_model} --sailing-model {args.sailing_model}",
         "",
     ]
     summary_path.write_text("\n".join(summary_lines), encoding="utf-8")
