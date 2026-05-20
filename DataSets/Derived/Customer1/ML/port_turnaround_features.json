@@ -1,5 +1,5 @@
 {
-  "customer": "stena",
+  "customer": "customer1",
   "split_strategy": {
     "type": "ratio",
     "validation_ratio": 0.42,
@@ -36,7 +36,7 @@
     "PORT_IS_BALLAST_MEDIAN_DAYS"
   ],
   "additional_features": [],
-  "train_path": "DataSets/Derived/Stena/ML/port_turnaround_train.parquet",
-  "validation_path": "DataSets/Derived/Stena/ML/port_turnaround_validation.parquet",
+  "train_path": "DataSets/Derived/Customer1/ML/port_turnaround_train.parquet",
+  "validation_path": "DataSets/Derived/Customer1/ML/port_turnaround_validation.parquet",
   "created_utc": "2025-12-04T08:42:15.562809+00:00"
 }

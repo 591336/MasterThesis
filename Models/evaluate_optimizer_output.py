@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--sample-dir",
-        default="DataSets/Derived/Stena/SampleScenario",
+        default="DataSets/Derived/Customer1/SampleScenario",
         help="Directory containing the sample scenario CSVs.",
     )
     parser.add_argument(

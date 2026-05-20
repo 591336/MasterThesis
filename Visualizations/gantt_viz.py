@@ -16,8 +16,8 @@ import argparse
 from typing import List
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_BASE = ROOT / "DataSets" / "Derived" / "Stena" / "SampleScenario"
-STATIC_BASE = ROOT / "DataSets" / "Derived" / "Stena" / "Static"
+DATA_BASE = ROOT / "DataSets" / "Derived" / "Customer1" / "SampleScenario"
+STATIC_BASE = ROOT / "DataSets" / "Derived" / "Customer1" / "Static"
 OUTPUT_DIR = ROOT / "Visualizations" / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -103,10 +103,10 @@ def add_haversine(voyages: pd.DataFrame, ports_latlon: pd.DataFrame) -> None:
 
 
 def run_optimizer(vessels: pd.DataFrame, voyages: pd.DataFrame, fleet_plan: pd.DataFrame, cfg: GanttConfig):
-    sailing_meta = json.loads((ROOT / "DataSets" / "Derived" / "Stena" / "ML" / "sailing_time_features.json").read_text())
-    sailing_artifact = ROOT / "Models" / "Artifacts" / "stena" / "sailing_time_dt.joblib"
-    turnaround_meta = json.loads((ROOT / "DataSets" / "Derived" / "Stena" / "ML" / "port_turnaround_features.json").read_text())
-    turnaround_artifact = ROOT / "Models" / "Artifacts" / "stena" / "port_turnaround_dt.joblib"
+    sailing_meta = json.loads((ROOT / "DataSets" / "Derived" / "Customer1" / "ML" / "sailing_time_features.json").read_text())
+    sailing_artifact = ROOT / "Models" / "Artifacts" / "customer1" / "sailing_time_dt.joblib"
+    turnaround_meta = json.loads((ROOT / "DataSets" / "Derived" / "Customer1" / "ML" / "port_turnaround_features.json").read_text())
+    turnaround_artifact = ROOT / "Models" / "Artifacts" / "customer1" / "port_turnaround_dt.joblib"
 
     adapters = ModelAdapters(
         turnaround=TurnaroundModelAdapter(turnaround_artifact, turnaround_meta),
@@ -127,8 +127,8 @@ def run_optimizer(vessels: pd.DataFrame, voyages: pd.DataFrame, fleet_plan: pd.D
     fleet_plan_key = str(fleet_plan["FLEET_PLAN_ID"].iloc[0]) if not fleet_plan.empty else "unknown"
 
     request = OptimizerRequest(
-        scenario_key="stena_sample",
-        scenario_code="stena_sample",
+        scenario_key="customer1_sample",
+        scenario_code="customer1_sample",
         fleet_plan_key=fleet_plan_key,
         is_budget=False,
         date_window=ScenarioWindow(start_date=None, end_date=None),

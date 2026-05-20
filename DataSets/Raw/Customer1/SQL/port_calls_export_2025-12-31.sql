@@ -1,4 +1,4 @@
--- Stena port-call export with voyage completion guardrails and optional terminal name.
+-- Customer1 port-call export with voyage completion guardrails and optional terminal name.
 WITH in_scope_voyages AS (
   SELECT
       v."VOYAGE_ID"

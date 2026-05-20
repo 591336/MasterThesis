@@ -128,7 +128,7 @@ def build_arcs(
 
     # Load port coordinates if available to compute pairwise distances for sail-time estimates.
     port_map = None
-    ports_path = Path("DataSets/Derived/Stena/Static/ports_latlon.csv")
+    ports_path = Path("DataSets/Derived/Customer1/Static/ports_latlon.csv")
     if ports_path.exists():
         try:
             ports_df = pd.read_csv(ports_path)

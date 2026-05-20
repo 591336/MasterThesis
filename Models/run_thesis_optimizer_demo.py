@@ -113,7 +113,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_sample() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
-    base = ROOT / "DataSets" / "Derived" / "Stena" / "SampleScenario"
+    base = ROOT / "DataSets" / "Derived" / "Customer1" / "SampleScenario"
     vessels = pd.read_csv(base / "vessels_with_availability.csv")
     voyages = pd.read_csv(base / "unallocated_voyages_detailed.csv")
     fleet_plan = pd.read_csv(base / "fleet_plan_voyages.csv")
@@ -139,7 +139,7 @@ def prep_dates(vessels: pd.DataFrame, voyages: pd.DataFrame) -> None:
 
 
 def add_haversine_miles(voyages: pd.DataFrame) -> None:
-    ports_path = ROOT / "DataSets" / "Derived" / "Stena" / "Static" / "ports_latlon.csv"
+    ports_path = ROOT / "DataSets" / "Derived" / "Customer1" / "Static" / "ports_latlon.csv"
     if not ports_path.exists():
         return
     ports = pd.read_csv(ports_path)
@@ -206,7 +206,7 @@ def summarize_port_coverage(voyages: pd.DataFrame) -> dict:
         "dest_mapped_pct_rows": None,
     }
 
-    ports_path = ROOT / "DataSets" / "Derived" / "Stena" / "Static" / "ports_latlon.csv"
+    ports_path = ROOT / "DataSets" / "Derived" / "Customer1" / "Static" / "ports_latlon.csv"
     if not ports_path.exists():
         return summary
     ports = pd.read_csv(ports_path)
@@ -224,10 +224,10 @@ def summarize_port_coverage(voyages: pd.DataFrame) -> dict:
 
 
 def load_adapters(turnaround_model: str = "dt", sailing_model: str = "dt") -> ModelAdapters:
-    sailing_meta = json.loads((ROOT / "DataSets" / "Derived" / "Stena" / "ML" / "sailing_time_features.json").read_text())
-    turnaround_meta = json.loads((ROOT / "DataSets" / "Derived" / "Stena" / "ML" / "port_turnaround_features.json").read_text())
-    sailing_artifact = ROOT / "Models" / "Artifacts" / "stena" / f"sailing_time_{sailing_model}.joblib"
-    turnaround_artifact = ROOT / "Models" / "Artifacts" / "stena" / f"port_turnaround_{turnaround_model}.joblib"
+    sailing_meta = json.loads((ROOT / "DataSets" / "Derived" / "Customer1" / "ML" / "sailing_time_features.json").read_text())
+    turnaround_meta = json.loads((ROOT / "DataSets" / "Derived" / "Customer1" / "ML" / "port_turnaround_features.json").read_text())
+    sailing_artifact = ROOT / "Models" / "Artifacts" / "customer1" / f"sailing_time_{sailing_model}.joblib"
+    turnaround_artifact = ROOT / "Models" / "Artifacts" / "customer1" / f"port_turnaround_{turnaround_model}.joblib"
     if not sailing_artifact.exists():
         raise FileNotFoundError(f"Missing sailing artifact: {sailing_artifact}")
     if not turnaround_artifact.exists():
@@ -259,8 +259,8 @@ def build_request(
         vv = vv[vv["VESSEL_ID"].astype(str).isin(vessel_ids)]
 
     return OptimizerRequest(
-        scenario_key="stena_sample",
-        scenario_code="stena_sample",
+        scenario_key="customer1_sample",
+        scenario_code="customer1_sample",
         fleet_plan_key=fleet_plan_key,
         is_budget=False,
         date_window=ScenarioWindow(start_date=None, end_date=None),
@@ -565,8 +565,8 @@ def main() -> None:
         "Objective framing:",
         "  simplified economic proxy objective (not a full calibrated commercial P&L)",
         "Model artifacts:",
-        f"  turnaround: Models/Artifacts/stena/port_turnaround_{args.turnaround_model}.joblib",
-        f"  sailing_time: Models/Artifacts/stena/sailing_time_{args.sailing_model}.joblib",
+        f"  turnaround: Models/Artifacts/customer1/port_turnaround_{args.turnaround_model}.joblib",
+        f"  sailing_time: Models/Artifacts/customer1/sailing_time_{args.sailing_model}.joblib",
         "Missing reposition diagnostics (strict):",
         f"  start_missing_reposition={strict_start_txt}, job_job_missing_reposition={strict_job_job_txt}",
         "Missing reposition diagnostics (coverage-first):",

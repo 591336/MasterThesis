@@ -21,19 +21,18 @@ class CustomerPaths:
         return self.derived_dir / "QA"
 
 
-DEFAULT_CUSTOMER = "northernlights"
+DEFAULT_CUSTOMER = "customer2"
 
 _CUSTOMER_MAP = {
-    "northernlights": {"raw": "NorthernLightsTest", "derived": "NorthernLights"},
-    "stena": {"raw": "Stena", "derived": "Stena"},
+    "customer1": {"raw": "Customer1", "derived": "Customer1"},
+    "customer2": {"raw": "Customer2", "derived": "Customer2"},
 }
 
 _ALIASES = {
-    "northernlightstest": "northernlights",
-    "nl": "northernlights",
-    "northern_lights": "northernlights",
-    "stena": "stena",
-    "saga": "stena",
+    "c1": "customer1",
+    "c2": "customer2",
+    "customer_1": "customer1",
+    "customer_2": "customer2",
 }
 
 

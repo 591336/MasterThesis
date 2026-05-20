@@ -1,5 +1,5 @@
 {
-  "customer": "stena",
+  "customer": "customer1",
   "split_strategy": {
     "type": "ratio",
     "validation_ratio": 0.3,
@@ -36,7 +36,7 @@
     "CANAL_COST"
   ],
   "additional_features": [],
-  "train_path": "DataSets/Derived/Stena/ML/sailing_time_train.parquet",
-  "validation_path": "DataSets/Derived/Stena/ML/sailing_time_validation.parquet",
+  "train_path": "DataSets/Derived/Customer1/ML/sailing_time_train.parquet",
+  "validation_path": "DataSets/Derived/Customer1/ML/sailing_time_validation.parquet",
   "created_utc": "2025-11-05T12:51:18.969547+00:00"
 }

@@ -51,7 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--customer",
         "-c",
-        help="Customer slug (e.g. 'northernlights', 'stena'). Defaults to northernlights.",
+        help="Customer slug (e.g. 'customer1', 'customer2'). Defaults to customer2.",
     )
     parser.add_argument(
         "--list-customers",

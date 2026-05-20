@@ -1,4 +1,4 @@
--- Stena voyage export scoped to completed voyages before 31-Dec-2025.
+-- Customer1 voyage export scoped to completed voyages before 31-Dec-2025.
 WITH voyages_filtered AS (
   SELECT
       v."VOYAGE_ID"                   AS voyage_id,

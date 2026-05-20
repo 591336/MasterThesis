@@ -25,7 +25,7 @@ from utils.customer_paths import (
 # We only JOIN + CLEAN here. No modeling, no medians — that comes in step02b.
 #
 # Inputs (from your repo structure):
-#   DataSets/Raw/NorthernLightsTest/
+#   DataSets/Raw/Customer2/
 #     - port_calls_completed_asof_2025-12-31.csv
 #     - voyages_completed_asof_2025-12-31.csv
 #     - vessels_reference.csv
@@ -67,7 +67,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--customer",
         "-c",
-        help="Customer slug (e.g. 'northernlights', 'stena'). Defaults to northernlights.",
+        help="Customer slug (e.g. 'customer1', 'customer2'). Defaults to customer2.",
     )
     parser.add_argument(
         "--list-customers",

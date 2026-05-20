@@ -65,7 +65,7 @@ class ProxyTurnaroundPredictor:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run optimizer MIP experiments on the Stena sample scenario.")
+    parser = argparse.ArgumentParser(description="Run optimizer MIP experiments on the Customer1 sample scenario.")
     parser.add_argument(
         "--experiment",
         action="append",
@@ -107,12 +107,12 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    base = Path("DataSets/Derived/Stena/SampleScenario")
+    base = Path("DataSets/Derived/Customer1/SampleScenario")
     vessels = pd.read_csv(base / "vessels_with_availability.csv")
     voyages = pd.read_csv(base / "unallocated_voyages_detailed.csv")
     fleet_plan = pd.read_csv(base / "fleet_plan_voyages.csv")
     manual_plan = pd.read_csv(base / "fleet_plan_manual.csv") if (base / "fleet_plan_manual.csv").exists() else None
-    ports_latlon_path = Path("DataSets/Derived/Stena/Static/ports_latlon.csv")
+    ports_latlon_path = Path("DataSets/Derived/Customer1/Static/ports_latlon.csv")
     ports_latlon = pd.read_csv(ports_latlon_path) if ports_latlon_path.exists() else pd.DataFrame()
 
     # Derive laycan columns if missing: use voyage start date as a proxy window.
@@ -162,10 +162,10 @@ def main() -> None:
     fleet_plan_key = str(fleet_plan["FLEET_PLAN_ID"].iloc[0]) if not fleet_plan.empty else "unknown"
 
     # Load sailing-time model and metadata; load turnaround model metadata for future use.
-    sailing_meta = json.loads(Path("DataSets/Derived/Stena/ML/sailing_time_features.json").read_text())
-    sailing_artifact = Path("Models/Artifacts/stena/sailing_time_dt.joblib")
-    turnaround_meta = json.loads(Path("DataSets/Derived/Stena/ML/port_turnaround_features.json").read_text())
-    turnaround_artifact = Path("Models/Artifacts/stena/port_turnaround_dt.joblib")
+    sailing_meta = json.loads(Path("DataSets/Derived/Customer1/ML/sailing_time_features.json").read_text())
+    sailing_artifact = Path("Models/Artifacts/customer1/sailing_time_dt.joblib")
+    turnaround_meta = json.loads(Path("DataSets/Derived/Customer1/ML/port_turnaround_features.json").read_text())
+    turnaround_artifact = Path("Models/Artifacts/customer1/port_turnaround_dt.joblib")
 
     adapters = ModelAdapters(
         turnaround=TurnaroundModelAdapter(turnaround_artifact, turnaround_meta),
@@ -243,8 +243,8 @@ def main() -> None:
             vg = vg.head(exp["voyage_limit"])
 
         request = OptimizerRequest(
-            scenario_key="stena_sample",
-            scenario_code="stena_sample",
+            scenario_key="customer1_sample",
+            scenario_code="customer1_sample",
             fleet_plan_key=fleet_plan_key,
             is_budget=False,
             date_window=ScenarioWindow(start_date=None, end_date=None),

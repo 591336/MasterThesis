@@ -1,4 +1,4 @@
--- Stena vessel master snapshot with basic characteristics.
+-- Customer1 vessel master snapshot with basic characteristics.
 SELECT
     ve."VESSEL_ID"          AS vessel_id,
     ve."VESSEL_NAME"        AS vessel_name,
