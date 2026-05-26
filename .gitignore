@@ -1,2 +1,20 @@
-# Ignore all plain text files across the repository
+# Local thesis notes and drafts
 *.txt
+
+# Private or generated data assets
+/DataSets/
+/Models/Artifacts/
+/Visualizations/output/
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+.uv-cache/
+.uv_cache/
+
+# Notebook / editor / OS cruft
+.ipynb_checkpoints/
+.DS_Store

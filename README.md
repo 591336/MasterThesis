@@ -41,9 +41,9 @@ If PowerShell blocks the install script, run PowerShell as Administrator once an
 
 ## Data / models
 
-- Only `*.txt` files are ignored by the current `.gitignore`
-- `DataSets/` and `Models/` contain local data/model assets, but they are not globally git-ignored
-- Keep raw data out of version control unless explicitly scrubbed or intentionally anonymised
+- This public repository is intended to contain source code only.
+- Private datasets, trained model artifacts, generated optimiser outputs, and local notes are git-ignored and should remain local.
+- If you reproduce the pipeline locally, keep raw customer data and derived scenario files out of version control unless they have been explicitly approved for publication.
 - Customer-aware pipelines (`customer2` by default):
   - `uv run python Models/build_port_turnaround_dataset.py [--customer customer1]`
   - `uv run python QA/port_turnaround_dataset_qa.py [--customer customer1]`
@@ -63,6 +63,11 @@ If PowerShell blocks the install script, run PowerShell as Administrator once an
   - `uv run python Models/run_thesis_optimizer_demo.py --skip-gantt`
 - Run the sample optimiser entry point with:
   - `uv run python Models/run_optimizer_sample.py`
+
+## Citation / reproducibility
+
+- In the thesis appendix or any external write-up, cite an exact tagged release or commit hash rather than only a moving GitHub branch URL.
+- Retrieve the current commit hash locally with `git rev-parse HEAD`.
 
 ## Tips
 
